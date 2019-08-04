@@ -1,0 +1,24 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pyqt5 = ">=5.12.1"
+qdarkstyle =">=2.6.6"
+pyqtgraph = "*"
+numpy = "*"
+scipy = "*"
+qtpy = "*"
+qtawesome = ">=0.5.7"
+requests = "*"
+markdown = "*"
+semver = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+distro = "*"
+
+[requires]
+python_version = "3.7"
