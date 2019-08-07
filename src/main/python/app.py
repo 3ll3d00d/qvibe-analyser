@@ -1,8 +1,8 @@
 import logging
 import os
 import sys
+
 # matplotlib.use("Qt5Agg")
-from contextlib import contextmanager
 
 os.environ['QT_API'] = 'pyqt5'
 # os.environ['PYQTGRAPH_QT_LIB'] = 'PyQt5'
@@ -15,7 +15,7 @@ import pyqtgraph as pg
 
 from qtpy import QtCore
 from qtpy.QtCore import QSettings, QThreadPool, QUrl
-from qtpy.QtGui import QIcon, QFont, QCursor, QDesktopServices
+from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences
@@ -23,21 +23,10 @@ from model.checker import VersionChecker, ReleaseNotesDialog
 from model.log import RollingLogger
 from ui.app import Ui_MainWindow
 
+from model.recorders import RecordersDialog, RecorderStore
+
 logger = logging.getLogger('qvibe')
 # logging.getLogger('matplotlib').setLevel(logging.WARNING)
-
-
-@contextmanager
-def wait_cursor(msg=None):
-    '''
-    Allows long running functions to show a busy cursor.
-    :param msg: a message to put in the status bar.
-    '''
-    try:
-        QApplication.setOverrideCursor(QCursor(QtCore.Qt.WaitCursor))
-        yield
-    finally:
-        QApplication.restoreOverrideCursor()
 
 
 class QVibe(QMainWindow, Ui_MainWindow):
@@ -50,6 +39,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.logger = logging.getLogger('qvibe')
         self.app = app
         self.preferences = prefs
+        self.__recorder_store = RecorderStore()
         if getattr(sys, 'frozen', False):
             self.__style_path_root = sys._MEIPASS
         else:
@@ -78,10 +68,10 @@ class QVibe(QMainWindow, Ui_MainWindow):
         # pg.setConfigOption('foreground', matplotlib.colors.to_hex(matplotlib.rcParams['axes.edgecolor']))
         # pg.setConfigOption('leftButtonPan', False)
         self.setupUi(self)
-        # logs
-        self.logViewer = RollingLogger(self.preferences, parent=self)
-        self.actionShow_Logs.triggered.connect(self.logViewer.show_logs)
-        self.action_Preferences.triggered.connect(self.showPreferences)
+        self.log_viewer = RollingLogger(self.preferences, parent=self)
+        self.actionShow_Logs.triggered.connect(self.log_viewer.show_logs)
+        self.action_Preferences.triggered.connect(self.show_preferences)
+        self.action_Recorders.triggered.connect(self.show_recorders)
 
     def show_release_notes(self):
         ''' Shows the release notes '''
@@ -134,11 +124,17 @@ class QVibe(QMainWindow, Ui_MainWindow):
         super().closeEvent(*args, **kwargs)
         self.app.closeAllWindows()
 
-    def showPreferences(self):
+    def show_preferences(self):
         '''
         Shows the preferences dialog.
         '''
         PreferencesDialog(self.preferences, self.__style_path_root, parent=self).exec()
+
+    def show_recorders(self):
+        '''
+        Shows the Recorders dialog.
+        '''
+        RecordersDialog(self.__recorder_store, self.preferences, parent=self).exec()
 
     def showAbout(self):
         msg_box = QMessageBox()

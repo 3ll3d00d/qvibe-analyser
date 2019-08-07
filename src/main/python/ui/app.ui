@@ -6,20 +6,26 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>972</width>
+    <height>679</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>QVibe Analyser</string>
   </property>
-  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout_2">
+    <item row="0" column="0">
+     <layout class="QGridLayout" name="gridLayout"/>
+    </item>
+   </layout>
+  </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>972</width>
      <height>30</height>
     </rect>
    </property>
@@ -27,6 +33,7 @@
     <property name="title">
      <string>&amp;Settings</string>
     </property>
+    <addaction name="action_Recorders"/>
     <addaction name="action_Preferences"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -56,6 +63,14 @@
   <action name="actionRelease_Notes">
    <property name="text">
     <string>Release &amp;Notes</string>
+   </property>
+  </action>
+  <action name="action_Recorders">
+   <property name="text">
+    <string>&amp;Recorders</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+R</string>
    </property>
   </action>
  </widget>

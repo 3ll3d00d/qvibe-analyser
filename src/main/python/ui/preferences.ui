@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>643</width>
-    <height>163</height>
+    <height>174</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,6 +16,74 @@
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <layout class="QVBoxLayout" name="panes">
+     <item>
+      <layout class="QGridLayout" name="analysisPane">
+       <item row="1" column="2">
+        <widget class="QLabel" name="yScaleLabel">
+         <property name="text">
+          <string>y Scale</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="xScaleLabel">
+         <property name="text">
+          <string>x Scale</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QDoubleSpinBox" name="xScale">
+         <property name="suffix">
+          <string> x</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="5">
+        <widget class="QDoubleSpinBox" name="zScale">
+         <property name="suffix">
+          <string> x</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QDoubleSpinBox" name="yScale">
+         <property name="suffix">
+          <string> x</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="4">
+        <widget class="QLabel" name="zScaleLabel">
+         <property name="text">
+          <string>z Scale</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0" colspan="6">
+        <widget class="QLabel" name="analysisLayoutLabel">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::Box</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Sunken</enum>
+         </property>
+         <property name="text">
+          <string>Analysis</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
      <item>
       <layout class="QGridLayout" name="systemPane">
        <item row="1" column="0">
