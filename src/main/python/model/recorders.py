@@ -3,15 +3,10 @@ import logging
 import time
 
 import numpy as np
-import qtawesome as qta
-from qtpy.QtCore import QRunnable, QObject, Signal, QByteArray
-from qtpy.QtNetwork import QTcpSocket, QAbstractSocket
-from qtpy.QtWidgets import QDialog
+from qtpy.QtCore import QRunnable, QObject, Signal, QTimer
+from qtpy.QtNetwork import QTcpSocket
 
-from common import block_signals, RingBuffer
-from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
-    RECORDER_TARGET_ACCEL_SENS, RECORDER_TARGET_GYRO_ENABLED, RECORDER_TARGET_GYRO_SENS, RECORDER_SAVED_IPS
-from ui.recorders import Ui_recordersDialog
+from common import RingBuffer
 
 logger = logging.getLogger('qvibe.recorders')
 
@@ -20,15 +15,30 @@ class RecorderStore:
     def __init__(self):
         self.__recorders = []
 
-    def connect(self, ip_address, port, target_config):
-        rec = Recorder(ip_address, port, target_config)
-        self.__recorders.append(rec)
+    def connect(self, ip_address, target_config):
+        rec = self.__get_recorder(ip_address)
+        if rec is None:
+            rec = Recorder(ip_address, target_config)
+            self.__recorders.append(rec)
         rec.connect()
+        return rec
 
     def disconnect(self, ip_address):
-        rec = next((r for r in self.__recorders if r.ip_address == ip_address), None)
+        rec = self.__get_recorder(ip_address)
         if rec is not None:
             rec.disconnect()
+
+    def __get_recorder(self, ip_address):
+        rec = next((r for r in self.__recorders if r.ip_address == ip_address), None)
+        return rec
+
+    def snap(self):
+        # TODO support n recorders
+        if len(self.__recorders) > 0:
+            rec = self.__recorders[0]
+            if rec.connected is True:
+                return rec.snap()
+        return None
 
 
 class RecorderConfig:
@@ -138,11 +148,16 @@ class RecorderConfig:
                and self.gyro_sens == other.gyro_sens
 
 
+class RecorderSignals(QObject):
+    on_status_change = Signal(bool, bool)
+
+
 class Recorder:
 
-    def __init__(self, ip_address, port, target_config):
+    def __init__(self, ip_address, target_config):
+        self.signals = RecorderSignals()
+        self.__timer = QTimer()
         self.__ip_address = ip_address
-        self.__port = port
         self.__target_config = target_config
         self.__name = None
         self.__config = None
@@ -150,15 +165,14 @@ class Recorder:
         self.__listener = None
         self.__recording = False
         # TODO get duration to keep
-        self.__buffer = RingBuffer(target_config.fs * 30, dtype=(np.float64, self.__target_config.value_len))
+        self.__buffer = self.__make_new_buffer()
+
+    def __make_new_buffer(self):
+        return RingBuffer(self.__target_config.fs * 30, dtype=(np.float64, self.__target_config.value_len))
 
     @property
     def ip_address(self):
         return self.__ip_address
-
-    @property
-    def port(self):
-        return self.__port
 
     @property
     def name(self):
@@ -180,20 +194,29 @@ class Recorder:
     def recording(self, recording):
         if recording != self.__recording:
             logger.info(f"Recording state changing from {self.__recording} to {recording}")
-        self.__recording = recording
+            self.__recording = recording
+            self.__emit_status()
+
+    def __emit_status(self):
+        self.signals.on_status_change.emit(self.__connected, self.__recording)
 
     def connect(self):
-        logger.info(f"Connecting to {self.ip_address}:{self.port}")
-        self.__listener = RecorderListener()
-        self.__listener.signals.on_state_change.connect(self.__on_state_change)
-        self.__listener.signals.on_data.connect(self.__handle_data)
-        self.__listener.ip = self.ip_address
-        self.__listener.port = self.port
-        self.__listener.connect()
+        logger.info(f"Connecting to {self.ip_address}")
+        if self.__listener is None:
+            self.__listener = RecorderListener()
+            self.__listener.signals.on_state_change.connect(self.__on_state_change)
+            self.__listener.signals.on_data.connect(self.__handle_data)
+            self.__listener.ip = self.ip_address
+        if self.__connected is False:
+            self.__listener.connect()
 
     def __on_state_change(self, new_state):
-        self.__connected = new_state
-        # TODO callback to the dialog
+        if new_state == 3:
+            self.__connected = True
+        else:
+            self.__connected = False
+            self.recording = False
+        self.__emit_status()
 
     def __handle_data(self, data):
         rcv = data
@@ -203,6 +226,12 @@ class Recorder:
             if self.__recording is True:
                 records = np.array([np.fromstring(r, sep='#', dtype=np.float64) for r in dat.split('|')])
                 self.__buffer.extend(records)
+                # TODO record no of events received in last x seconds, calculate actual sample rate
+                # if self.__buffer.is_full:
+                #     if self.__buffer.idx[1] % 100 == 0:
+                        # self.signals.on_status_change.emit(self.__format_status())
+                # elif len(self.__buffer) % 100 == 0:
+                #     self.signals.on_status_change.emit(self.__format_status())
         elif cmd == 'DST':
             if RecorderConfig.from_dict(json.loads(dat)[0]) == self.__target_config:
                 self.recording = True
@@ -220,103 +249,19 @@ class Recorder:
 
     def disconnect(self):
         if self.__listener is not None:
-            logger.info(f"Disconnecting from {self.ip_address}:{self.port}")
+            logger.info(f"Disconnecting from {self.ip_address}")
             self.__listener.kill()
-            logger.info(f"Disconnected from {self.ip_address}:{self.port}")
+            logger.info(f"Disconnected from {self.ip_address}")
+
+    def snap(self):
+        '''
+        :return: a copy of the current data.
+        '''
+        return self.__buffer.unwrap()
 
 
-class RecordersDialog(QDialog, Ui_recordersDialog):
-    '''
-    Allows user to add/remove recorders.
-    '''
-
-    def __init__(self, recorder_store, preferences, parent=None):
-        super(RecordersDialog, self).__init__(parent)
-        self.setupUi(self)
-        self.__preferences = preferences
-        self.__target_config = self.__load_config()
-        address = self.__preferences.get(RECORDER_SAVED_IPS)
-        if address is not None:
-            tokens = address.split(':')
-            if len(tokens) == 2:
-                self.ipAddress.setText(tokens[0])
-                self.port.setValue(int(tokens[1]))
-            else:
-                self.__preferences.clear(RECORDER_SAVED_IPS)
-        self.__display_target_config()
-        self.__store = recorder_store
-        self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
-        self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
-        self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
-        # self.__recorder = Recorder()
-        # self.__recorder.signals.on_data.connect(self.update_spinner)
-        # QThreadPool.globalInstance().start(self.__recorder)
-
-    def update_target(self):
-        self.__target_config.fs = self.targetSampleRate.value()
-        self.__target_config.samples_per_batch = self.targetBatchSize.value()
-        self.__target_config.accelerometer_enabled = self.targetAccelEnabled.isChecked()
-        self.__target_config.accelerometer_sens = int(self.targetAccelSens.currentText())
-        self.__target_config.gyro_enabled = self.targetGyroEnabled.isChecked()
-        self.__target_config.gyro_sens = int(self.targetGyroSens.currentText())
-
-    def __load_config(self):
-        config = RecorderConfig()
-        config.fs = self.__preferences.get(RECORDER_TARGET_FS)
-        config.samples_per_batch = self.__preferences.get(RECORDER_TARGET_SAMPLES_PER_BATCH)
-        config.accelerometer_enabled = self.__preferences.get(RECORDER_TARGET_ACCEL_ENABLED)
-        config.accelerometer_sens = self.__preferences.get(RECORDER_TARGET_ACCEL_SENS)
-        config.gyro_enabled = self.__preferences.get(RECORDER_TARGET_GYRO_ENABLED)
-        config.gyro_sens = self.__preferences.get(RECORDER_TARGET_GYRO_SENS)
-        return config
-
-    def __display_target_config(self):
-        with block_signals(self.targetSampleRate):
-            self.targetSampleRate.setValue(self.__target_config.fs)
-        with block_signals(self.targetBatchSize):
-            self.targetBatchSize.setValue(self.__target_config.samples_per_batch)
-        with block_signals(self.targetAccelEnabled):
-            self.targetAccelEnabled.setChecked(self.__target_config.accelerometer_enabled)
-        with block_signals(self.targetAccelSens):
-            self.targetAccelSens.setCurrentText(str(self.__target_config.accelerometer_sens))
-        with block_signals(self.targetGyroEnabled):
-            self.targetGyroEnabled.setChecked(self.__target_config.gyro_enabled)
-        with block_signals(self.targetGyroSens):
-            self.targetGyroSens.setCurrentText(str(self.__target_config.gyro_sens))
-
-    def connect_recorder(self):
-        self.__store.connect(self.ipAddress.text(), self.port.value(), self.__target_config)
-        # self.ipAddress.setEnabled(False)
-
-    def disconnect_recorder(self):
-        self.__store.disconnect(self.ipAddress.text())
-        # self.ipAddress.setEnabled(True)
-
-    def reset_target(self):
-        self.__target_config = self.__load_config()
-        self.__display_target_config()
-
-    def apply_target(self):
-        self.__preferences.set(RECORDER_TARGET_FS, self.__target_config.fs)
-        self.__preferences.set(RECORDER_TARGET_SAMPLES_PER_BATCH, self.__target_config.samples_per_batch)
-        self.__preferences.set(RECORDER_TARGET_ACCEL_ENABLED, self.__target_config.accelerometer_enabled)
-        self.__preferences.set(RECORDER_TARGET_ACCEL_SENS, self.__target_config.accelerometer_sens)
-        self.__preferences.set(RECORDER_TARGET_GYRO_ENABLED, self.__target_config.gyro_enabled)
-        self.__preferences.set(RECORDER_TARGET_GYRO_SENS, self.__target_config.gyro_sens)
-        # TODO apply to connected recorders
-
-    def update_spinner(self, val):
-        self.recorderSampleIndex.setValue(val)
-
-    def add_new_recorder(self):
-        pass
-
-    def save_recorders(self):
-        self.__preferences.set(RECORDER_SAVED_IPS, f"{self.ipAddress.text()}:{self.port.value()}")
-
-
-class RecorderSignals(QObject):
-    on_state_change = Signal(bool)
+class RecorderListenerSignals(QObject):
+    on_state_change = Signal(int)
     on_data = Signal(str)
     send_target = Signal(RecorderConfig)
 
@@ -326,8 +271,7 @@ class RecorderListener(QRunnable):
     def __init__(self):
         super().__init__()
         self.__ip = None
-        self.__port = None
-        self.signals = RecorderSignals()
+        self.signals = RecorderListenerSignals()
         self.__socket = QTcpSocket()
         self.__state = QTcpSocket.UnconnectedState
         self.__run = True
@@ -343,22 +287,17 @@ class RecorderListener(QRunnable):
     def ip(self, ip):
         self.__ip = ip
 
-    @property
-    def port(self):
-        return self.__port
-
-    @port.setter
-    def port(self, port):
-        self.__port = port
-
     def connect(self):
-        if self.__ip is not None and self.__port is not None:
-            self.__socket.connectToHost(self.__ip, self.__port)
+        if self.__ip is not None:
+            ip, port = self.__ip.split(':')
+            self.__socket.connectToHost(ip, int(port))
 
     def __on_state_change(self, new_state):
-        logger.info(f"Connection state change from {self.__state} to {new_state}")
-        # TODO 0 unconnected, 3 connected, 6 closing
-        self.__state = new_state
+        if self.__state != new_state:
+            logger.info(f"Connection state change from {self.__state} to {new_state}")
+            # TODO 0 unconnected, 3 connected, 6 closing
+            self.__state = new_state
+            self.signals.on_state_change.emit(new_state)
 
     def run(self):
         while self.__run:
@@ -370,12 +309,12 @@ class RecorderListener(QRunnable):
 
     def __send_target_state(self, target_state):
         msg = f"SET|{json.dumps(target_state.to_dict())}\r\n'".encode()
-        logger.info(f"Sending {msg} to {self.ip}:{self.port}")
+        logger.info(f"Sending {msg} to {self.ip}")
         res = self.__socket.write(msg)
         if self.__socket.flush() is True:
-            logger.info(f"Sent {res} byte SET msg to {self.ip}:{self.port}")
+            logger.info(f"Sent {res} byte SET msg to {self.ip}")
         else:
-            logger.warning(f"SET message was not sent to {self.ip}:{self.port}, {res} bytes sent")
+            logger.warning(f"SET message was not sent to {self.ip}, {res} bytes sent")
 
     def kill(self):
         self.__run = False

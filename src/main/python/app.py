@@ -3,6 +3,7 @@ import os
 import sys
 
 # matplotlib.use("Qt5Agg")
+from model.signal import SignalStore
 
 os.environ['QT_API'] = 'pyqt5'
 # os.environ['PYQTGRAPH_QT_LIB'] = 'PyQt5'
@@ -12,18 +13,23 @@ if sys.platform == 'win32' and getattr(sys, '_MEIPASS', False):
     os.environ['PATH'] = sys._MEIPASS + os.pathsep + os.environ['PATH']
 
 import pyqtgraph as pg
+import qtawesome as qta
+import numpy as np
 
 from qtpy import QtCore
-from qtpy.QtCore import QSettings, QThreadPool, QUrl
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
+from common import block_signals, format_pg_chart
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences
 from model.checker import VersionChecker, ReleaseNotesDialog
 from model.log import RollingLogger
+from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
+    RECORDER_TARGET_ACCEL_SENS, RECORDER_TARGET_GYRO_ENABLED, RECORDER_TARGET_GYRO_SENS, RECORDER_SAVED_IPS
 from ui.app import Ui_MainWindow
 
-from model.recorders import RecordersDialog, RecorderStore
+from model.recorders import  RecorderStore, RecorderConfig
 
 logger = logging.getLogger('qvibe')
 # logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -39,7 +45,9 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.logger = logging.getLogger('qvibe')
         self.app = app
         self.preferences = prefs
+        self.__timer = None
         self.__recorder_store = RecorderStore()
+        self.__signal_store = SignalStore()
         if getattr(sys, 'frozen', False):
             self.__style_path_root = sys._MEIPASS
         else:
@@ -68,10 +76,143 @@ class QVibe(QMainWindow, Ui_MainWindow):
         # pg.setConfigOption('foreground', matplotlib.colors.to_hex(matplotlib.rcParams['axes.edgecolor']))
         # pg.setConfigOption('leftButtonPan', False)
         self.setupUi(self)
+        # menus
         self.log_viewer = RollingLogger(self.preferences, parent=self)
         self.actionShow_Logs.triggered.connect(self.log_viewer.show_logs)
         self.action_Preferences.triggered.connect(self.show_preferences)
-        self.action_Recorders.triggered.connect(self.show_recorders)
+        # live vibe view
+        self.__vibe_x = None
+        self.__vibe_y = None
+        self.__vibe_z = None
+        # recorders
+        self.__target_config = self.__load_config()
+        self.__on_recorder_status_change(False, False)
+        # TODO update y range as sensitivity changes
+        format_pg_chart(self.liveVibrationChart, (0, 30), (-4, 4))
+        address = self.preferences.get(RECORDER_SAVED_IPS)
+        if address is not None:
+            self.ipAddress.setText(address)
+        self.__display_target_config()
+        self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
+        self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
+        self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
+        self.connectRecorderButton.setIcon(qta.icon('fa5s.sign-in-alt'))
+        self.disconnectRecorderButton.setIcon(qta.icon('fa5s.sign-out-alt'))
+
+    def __start_timer(self):
+        '''
+        Starts the data collection timer.
+        '''
+        if self.__timer is None:
+            self.__timer = QTimer()
+            self.__timer.timeout.connect(self.__collect_signals)
+        self.__timer.start(1.0 / self.fps.value())
+
+    def __stop_timer(self):
+        if self.__timer is not None:
+            self.__timer.stop()
+
+    def __collect_signals(self):
+        ''' collects the latest signal and pushes it into the live vibration view '''
+        signal = self.__recorder_store.snap()
+        if signal is not None and signal.shape[0] > 0:
+            t = signal[:, 0]
+            t = t - np.min(t)
+            t = t/500
+            if self.__vibe_x is None:
+                self.__vibe_x = self.liveVibrationChart.plot(t, signal[:, 2], pen=pg.mkPen('r', width=1))
+                self.__vibe_y = self.liveVibrationChart.plot(t, signal[:, 3], pen=pg.mkPen('g', width=1))
+                self.__vibe_z = self.liveVibrationChart.plot(t, signal[:, 4], pen=pg.mkPen('b', width=1))
+            else:
+                self.__vibe_x.setData(t, signal[:, 2])
+                self.__vibe_y.setData(t, signal[:, 3])
+                self.__vibe_z.setData(t, signal[:, 4])
+
+    def update_target(self):
+        ''' updates the current target config from the UI values '''
+        self.__target_config.fs = self.targetSampleRate.value()
+        self.__target_config.samples_per_batch = self.targetBatchSize.value()
+        self.__target_config.accelerometer_enabled = self.targetAccelEnabled.isChecked()
+        self.__target_config.accelerometer_sens = int(self.targetAccelSens.currentText())
+        self.__target_config.gyro_enabled = self.targetGyroEnabled.isChecked()
+        self.__target_config.gyro_sens = int(self.targetGyroSens.currentText())
+
+    def __load_config(self):
+        ''' loads a config object from the preferences store '''
+        config = RecorderConfig()
+        config.fs = self.preferences.get(RECORDER_TARGET_FS)
+        config.samples_per_batch = self.preferences.get(RECORDER_TARGET_SAMPLES_PER_BATCH)
+        config.accelerometer_enabled = self.preferences.get(RECORDER_TARGET_ACCEL_ENABLED)
+        config.accelerometer_sens = self.preferences.get(RECORDER_TARGET_ACCEL_SENS)
+        config.gyro_enabled = self.preferences.get(RECORDER_TARGET_GYRO_ENABLED)
+        config.gyro_sens = self.preferences.get(RECORDER_TARGET_GYRO_SENS)
+        return config
+
+    def __display_target_config(self):
+        ''' updates the displayed target config '''
+        with block_signals(self.targetSampleRate):
+            self.targetSampleRate.setValue(self.__target_config.fs)
+        with block_signals(self.targetBatchSize):
+            self.targetBatchSize.setValue(self.__target_config.samples_per_batch)
+        with block_signals(self.targetAccelEnabled):
+            self.targetAccelEnabled.setChecked(self.__target_config.accelerometer_enabled)
+        with block_signals(self.targetAccelSens):
+            self.targetAccelSens.setCurrentText(str(self.__target_config.accelerometer_sens))
+        with block_signals(self.targetGyroEnabled):
+            self.targetGyroEnabled.setChecked(self.__target_config.gyro_enabled)
+        with block_signals(self.targetGyroSens):
+            self.targetGyroSens.setCurrentText(str(self.__target_config.gyro_sens))
+
+    def connect_recorder(self):
+        ''' connects the selected recorder '''
+        rec = self.__recorder_store.connect(self.ipAddress.text(), self.__target_config)
+        rec.signals.on_status_change.connect(self.__on_recorder_status_change)
+        rec_idx = self.activeRecorderSelector.findText(rec.ip_address)
+        if rec_idx == -1:
+            self.activeRecorderSelector.addItem(rec.ip_address)
+
+    def __on_recorder_status_change(self, connected, recording):
+        '''
+        Updates various fields to reflect recorder status.
+        :param connected: true if connected.
+        :param recording: true if actively recording.
+        '''
+        self.connected.setChecked(connected)
+        self.recording.setChecked(recording)
+        self.ipAddress.setEnabled(not connected)
+        self.connectRecorderButton.setEnabled(not connected)
+        self.disconnectRecorderButton.setEnabled(connected)
+        self.fps.setEnabled(not connected)
+        if connected is True:
+            self.__start_timer()
+        else:
+            self.__stop_timer()
+
+    def disconnect_recorder(self):
+        ''' disconnects the selected recorder '''
+        self.__recorder_store.disconnect(self.ipAddress.text())
+
+    def reset_target(self):
+        ''' resets the target config from preferences. '''
+        self.__target_config = self.__load_config()
+        self.__display_target_config()
+
+    def apply_target(self):
+        ''' saves the target config to the preferences. '''
+        self.preferences.set(RECORDER_TARGET_FS, self.__target_config.fs)
+        self.preferences.set(RECORDER_TARGET_SAMPLES_PER_BATCH, self.__target_config.samples_per_batch)
+        self.preferences.set(RECORDER_TARGET_ACCEL_ENABLED, self.__target_config.accelerometer_enabled)
+        self.preferences.set(RECORDER_TARGET_ACCEL_SENS, self.__target_config.accelerometer_sens)
+        self.preferences.set(RECORDER_TARGET_GYRO_ENABLED, self.__target_config.gyro_enabled)
+        self.preferences.set(RECORDER_TARGET_GYRO_SENS, self.__target_config.gyro_sens)
+        # TODO apply to connected recorders
+
+    def add_new_recorder(self):
+        pass
+
+    def save_recorders(self):
+        ''' Saves the specified recorders to preferences. '''
+        self.preferences.set(RECORDER_SAVED_IPS, self.ipAddress.text())
 
     def show_release_notes(self):
         ''' Shows the release notes '''
@@ -130,12 +271,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         PreferencesDialog(self.preferences, self.__style_path_root, parent=self).exec()
 
-    def show_recorders(self):
-        '''
-        Shows the Recorders dialog.
-        '''
-        RecordersDialog(self.__recorder_store, self.preferences, parent=self).exec()
-
     def showAbout(self):
         msg_box = QMessageBox()
         msg_box.setText(
@@ -182,7 +317,7 @@ if __name__ == '__main__':
         if e_dialog is not None:
             formatted = traceback.format_exception(etype=exctype, value=value, tb=tb)
             e_dialog.setWindowTitle('Unexpected Error')
-            url = 'https://github.com/3ll3d00d/beqdesigner/issues/new'
+            url = 'https://github.com/3ll3d00d/qvibe-analyser/issues/new'
             msg = f"Unexpected Error detected, go to {url} to log the issue<p>{'<br>'.join(formatted)}"
             e_dialog.showMessage(msg)
             e_dialog.resize(1200, 400)

@@ -1,9 +1,11 @@
-from contextlib import contextmanager
-import numpy as np
 from collections import Sequence
+from contextlib import contextmanager
 
-from qtpy.QtGui import QCursor
+import numpy as np
+import pyqtgraph as pg
+from matplotlib.font_manager import FontProperties
 from qtpy import QtCore
+from qtpy.QtGui import QCursor, QFont
 from qtpy.QtWidgets import QApplication
 
 
@@ -68,6 +70,10 @@ class RingBuffer(Sequence):
         elif self.__left_idx < 0:
             self.__left_idx += self.__capacity
             self.__right_idx += self.__capacity
+
+    @property
+    def idx(self):
+        return self.__left_idx, self.__right_idx
 
     @property
     def is_full(self):
@@ -193,3 +199,37 @@ class RingBuffer(Sequence):
     # Everything else
     def __repr__(self):
         return '<RingBuffer of {!r}>'.format(np.asarray(self))
+
+
+class PlotWidgetWithDateAxis(pg.PlotWidget):
+    def __init__(self, parent=None, background='default', **kargs):
+        super().__init__(parent=parent,
+                         background=background,
+                         axisItems={'bottom': TimeAxisItem(orientation='bottom')},
+                         **kargs)
+
+
+class TimeAxisItem(pg.AxisItem):
+    def tickStrings(self, values, scale, spacing):
+        import datetime
+        return [str(datetime.timedelta(seconds=value)).split('.')[0] for value in values]
+
+
+def format_pg_chart(chart, x_lim, y_lim):
+    '''
+    Applies a standard format to a pyqtgraph chart.
+    :param chart: the chart.
+    '''
+    label_font = QFont()
+    fp = FontProperties()
+    label_font.setPointSize(fp.get_size_in_points() * 0.7)
+    label_font.setFamily(fp.get_name())
+    for name in ['left', 'right', 'bottom', 'top']:
+        chart.getPlotItem().getAxis(name).setTickFont(label_font)
+    chart.getPlotItem().showGrid(x=True, y=True, alpha=0.5)
+    chart.getPlotItem().disableAutoRange()
+    chart.getPlotItem().setLimits(xMin=0.0, xMax=x_lim[1], yMin=y_lim[0], yMax=y_lim[1])
+    chart.getPlotItem().setXRange(*x_lim, padding=0.0)
+    chart.getPlotItem().setYRange(*y_lim, padding=0.0)
+    chart.getPlotItem().setDownsampling(ds=True, auto=True, mode='peak')
+    chart.getPlotItem().layout.setContentsMargins(10, 20, 30, 20)
