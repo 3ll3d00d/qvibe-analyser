@@ -1,9 +1,12 @@
 import json
 import logging
 import time
+from collections import Sequence
 
+import qtawesome as qta
 import numpy as np
-from qtpy.QtCore import QRunnable, QObject, Signal, QTimer
+from qtpy import QtWidgets, QtCore
+from qtpy.QtCore import QObject, Signal
 from qtpy.QtNetwork import QTcpSocket
 
 from common import RingBuffer
@@ -11,34 +14,279 @@ from common import RingBuffer
 logger = logging.getLogger('qvibe.recorders')
 
 
-class RecorderStore:
-    def __init__(self):
-        self.__recorders = []
+class RecorderSignals(QObject):
+    on_status_change = Signal(str, bool)
 
-    def connect(self, ip_address, target_config):
-        rec = self.__get_recorder(ip_address)
-        if rec is None:
-            rec = Recorder(ip_address, target_config)
-            self.__recorders.append(rec)
-        rec.connect()
-        return rec
 
-    def disconnect(self, ip_address):
-        rec = self.__get_recorder(ip_address)
-        if rec is not None:
-            rec.disconnect()
+class Recorder:
 
-    def __get_recorder(self, ip_address):
-        rec = next((r for r in self.__recorders if r.ip_address == ip_address), None)
-        return rec
+    def __init__(self, idx, parent_layout, parent, target_config):
+        ''' Adds widgets to the main screen to display another recorder. '''
+        self.__target_config = target_config
+        self.signals = RecorderSignals()
+        self.__name = None
+        self.__listener = None
+        # TODO get buffer size
+        self.__buffer_size = 30
+        self.__snap_idx = 0
+        self.__buffer = self.__make_new_buffer()
+        # init the widgets on screen which control it
+        self.__recorder_layout = QtWidgets.QGridLayout()
+        self.__recorder_layout.setObjectName(f"recorders_layout_{idx}")
+        self.__connect_button = QtWidgets.QToolButton(parent)
+        self.__connect_button.setObjectName(f"connect_recorder_button_{idx}")
+        self.__connect_button.clicked.connect(self.connect)
+        self.__recorder_layout.addWidget(self.__connect_button, 0, 2, 1, 1)
+        self.__disconnect_button = QtWidgets.QToolButton(parent)
+        self.__disconnect_button.setObjectName(f"disconnect_recorder_button_{idx}")
+        self.__disconnect_button.clicked.connect(self.disconnect)
+        self.__recorder_layout.addWidget(self.__disconnect_button, 1, 2, 1, 1)
+        self.__ip_address = QtWidgets.QLineEdit(parent)
+        self.__ip_address.setObjectName(f"ip_address_{idx}")
+        self.__ip_address.textChanged.connect(self.__validate_ip)
+        self.__recorder_layout.addWidget(self.__ip_address, 0, 1, 1, 1)
+        self.__ip_address_label = QtWidgets.QLabel(parent)
+        self.__ip_address_label.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.__ip_address_label.setObjectName(f"ip_address_label_{idx}")
+        self.__ip_address.setInputMask("000.000.000.000:00000; ")
+        self.__recorder_layout.addWidget(self.__ip_address_label, 0, 0, 1, 1)
+        self.__state_layout = QtWidgets.QHBoxLayout()
+        self.__state_layout.setObjectName(f"state_layout_{idx}")
+        self.__connected = QtWidgets.QCheckBox(parent)
+        self.__connected.setObjectName(f"connected_{idx}")
+        self.__connected.setText('Connected?')
+        self.__connected.setEnabled(False)
+        self.__state_layout.addWidget(self.__connected)
+        self.__recording = QtWidgets.QCheckBox(parent)
+        self.__recording.setObjectName(f"recording_{idx}")
+        self.__recording.setText('Recording?')
+        self.__recording.setEnabled(False)
+        self.__state_layout.addWidget(self.__recording)
+        self.__recorder_layout.addLayout(self.__state_layout, 1, 0, 1, 2)
+        parent_layout.addLayout(self.__recorder_layout)
+        self.__connect_button.setIcon(qta.icon('fa5s.sign-in-alt'))
+        self.__disconnect_button.setIcon(qta.icon('fa5s.sign-out-alt'))
+
+    def __validate_ip(self, ip):
+        self.__connect_button.setEnabled(self.__is_valid_ip(ip))
+
+    @staticmethod
+    def __is_valid_ip(ip):
+        ''' checks if the string is a valid ip:port. '''
+        tokens = ip.split(':')
+        if len(tokens) == 2:
+            ip_tokens = tokens[0].split('.')
+            if len(ip_tokens) == 4:
+                try:
+                    first, *nums = [int(i) for i in ip_tokens]
+                    if 0 < first <= 255:
+                        if all(0 <= i <= 255 for i in nums):
+                            return 0 < int(tokens[1]) < 65536
+                except Exception as e:
+                    pass
+        return False
+
+    def __handle_status_change(self):
+        ''' Updates various fields to reflect recorder status. '''
+        is_connected = self.__connected.isChecked()
+        self.__ip_address.setEnabled(not is_connected)
+        self.__connect_button.setEnabled(not is_connected)
+        self.__disconnect_button.setEnabled(is_connected)
+        self.signals.on_status_change.emit(self.__ip_address.text(), is_connected)
+
+    def __make_new_buffer(self):
+        return RingBuffer(self.__target_config.fs * self.__buffer_size,
+                          dtype=(np.float64, self.__target_config.value_len))
+
+    def reset_buffer_size(self, buffer_size):
+        '''
+        Replaces the buffer with a new buffer that can hold the specified amount of time data.
+        :param buffer_size: the new size (in seconds).
+        '''
+        self.__buffer_size = buffer_size
+        dat, _ = self.__buffer.unwrap()
+        new_buf = self.__make_new_buffer()
+        new_buf.append(dat)
+        self.__buffer = new_buf
+
+    @property
+    def ip_address(self):
+        return self.__ip_address.text()
+
+    @ip_address.setter
+    def ip_address(self, ip_address):
+        self.__ip_address.setText(ip_address)
+
+    @property
+    def name(self):
+        return self.__name
+
+    @property
+    def target_config(self):
+        return self.__target_config
+
+    @target_config.setter
+    def target_config(self, target_config):
+        if target_config != self.__target_config:
+            self.__target_config = target_config
+            if self.__listener is not None:
+                self.__listener.signals.send_target(target_config)
+
+    @property
+    def connected(self):
+        return self.__connected.isChecked()
+
+    @connected.setter
+    def connected(self, connected):
+        if connected != self.__connected.isChecked():
+            logger.info(f"Connected state changing from {self.__connected.isChecked()} to {connected}")
+            self.__connected.setChecked(connected)
+            self.__handle_status_change()
+
+    @property
+    def recording(self):
+        return self.__recording.isChecked()
+
+    @recording.setter
+    def recording(self, recording):
+        if recording != self.__recording.isChecked():
+            logger.info(f"Recording state changing from {self.__recording.isChecked()} to {recording}")
+            self.__recording.setChecked(recording)
+
+    def connect(self):
+        ''' Creates a RecorderListener if required and then connects it. '''
+        logger.info(f"Connecting to {self.ip_address}")
+        if self.__listener is None:
+            self.__listener = RecorderSocketBridge()
+            self.__listener.signals.on_socket_state_change.connect(self.__on_state_change)
+            self.__listener.signals.on_data.connect(self.__handle_data)
+            self.__listener.ip = self.ip_address
+        if self.connected is False:
+            self.__listener.connect()
+
+    def __on_state_change(self, new_state):
+        '''
+        Reacts to connection state changes to determine if we are connected or not
+        propagates that status via a signal
+        '''
+        if new_state == 3:
+            self.connected = True
+        else:
+            self.connected = False
+            self.recording = False
+
+    def __handle_data(self, data):
+        '''
+        Main protocol handler which can react to data updates by recording them in the buffer and config updates by
+        validating device state to enable recording to start or sending new config if required.
+        '''
+        rcv = data
+        cmd = rcv[0:3]
+        dat = data[4:]
+        if cmd == 'DAT':
+            if self.recording is True:
+                records = np.array([np.fromstring(r, sep='#', dtype=np.float64) for r in dat.split('|')])
+                logger.debug(f"Buffering DAT {records[0,0]} - {records[-1,0]}")
+                self.__buffer.extend(records)
+        elif cmd == 'DST':
+            logger.info(f"Received DST {dat}")
+            if RecorderConfig.from_dict(json.loads(dat)[0]) == self.__target_config:
+                self.recording = True
+            else:
+                self.recording = False
+                self.__listener.signals.send_target.emit(self.__target_config)
+        elif cmd == 'STR':
+            pass
+        elif rcv == 'ERROR':
+            # TODO reset
+            pass
+        else:
+            # TODO unknown
+            pass
+
+    def disconnect(self):
+        ''' Disconnects the listener if we have one. '''
+        if self.__listener is not None:
+            logger.info(f"Disconnecting from {self.ip_address}")
+            self.__listener.kill()
+            logger.info(f"Disconnected from {self.ip_address}")
 
     def snap(self):
+        '''
+        :return: a 3 entry tuple with the copy of the current data, the number of events since the last snap and the snap idx
+        '''
+        start = time.time()
+        b = self.__buffer.unwrap()
+        c = self.__buffer.take_event_count()
+        self.__snap_idx += 1
+        end = time.time()
+        logger.debug(f"Snap {self.__snap_idx} in {round((end-start) * 1000, 3)}ms")
+        return b, c, self.__snap_idx
+
+
+class RecorderStore(Sequence):
+    '''
+    Stores all recorders known to the system.
+    '''
+    def __init__(self, target_config, parent_layout, parent):
+        self.signals = RecorderSignals()
+        self.__parent_layout = parent_layout
+        self.__parent = parent
+        self.__recorders = []
+        self.__target_config = target_config
+
+    @property
+    def target_config(self):
+        return self.__target_config
+
+    @target_config.setter
+    def target_config(self, target_config):
+        self.__target_config = target_config
+        for r in self:
+            r.target_config = target_config
+
+    def append(self):
+        ''' adds a new recorder. '''
+        rec = Recorder(len(self.__recorders), self.__parent_layout, self.__parent, self.__target_config)
+        rec.signals.on_status_change.connect(self.__on_recorder_connect_event)
+        self.__recorders.append(rec)
+        return rec
+
+    def load(self, ip_addresses):
+        ''' Creates recorders for all given IP addresses. '''
+        for ip in ip_addresses:
+            self.append().ip_address = ip
+
+    def __getitem__(self, i):
+        return self.__recorders[i]
+
+    def __len__(self):
+        return len(self.__recorders)
+
+    def snap(self):
+        '''
+        :return: current data for each recorder.
+        '''
         # TODO support n recorders
-        if len(self.__recorders) > 0:
-            rec = self.__recorders[0]
+        if len(self) > 0:
+            rec = self[0]
             if rec.connected is True:
                 return rec.snap()
         return None
+
+    def __on_recorder_connect_event(self, ip, connected):
+        '''
+        propagates a recorder status change.
+        :param ip: the ip.
+        :param connected: if it is connected.
+        '''
+        self.signals.on_status_change.emit(ip, connected)
+
+    def any_connected(self):
+        '''
+        :return: True if any recorded is connected.
+        '''
+        return any(r.connected is True for r in self)
 
 
 class RecorderConfig:
@@ -148,133 +396,23 @@ class RecorderConfig:
                and self.gyro_sens == other.gyro_sens
 
 
-class RecorderSignals(QObject):
-    on_status_change = Signal(bool, bool)
-
-
-class Recorder:
-
-    def __init__(self, ip_address, target_config):
-        self.signals = RecorderSignals()
-        self.__timer = QTimer()
-        self.__ip_address = ip_address
-        self.__target_config = target_config
-        self.__name = None
-        self.__config = None
-        self.__connected = False
-        self.__listener = None
-        self.__recording = False
-        # TODO get duration to keep
-        self.__buffer = self.__make_new_buffer()
-
-    def __make_new_buffer(self):
-        return RingBuffer(self.__target_config.fs * 30, dtype=(np.float64, self.__target_config.value_len))
-
-    @property
-    def ip_address(self):
-        return self.__ip_address
-
-    @property
-    def name(self):
-        return self.__name
-
-    @property
-    def config(self):
-        return self.__config
-
-    @property
-    def connected(self):
-        return self.__connected
-
-    @property
-    def recording(self):
-        return self.__recording
-
-    @recording.setter
-    def recording(self, recording):
-        if recording != self.__recording:
-            logger.info(f"Recording state changing from {self.__recording} to {recording}")
-            self.__recording = recording
-            self.__emit_status()
-
-    def __emit_status(self):
-        self.signals.on_status_change.emit(self.__connected, self.__recording)
-
-    def connect(self):
-        logger.info(f"Connecting to {self.ip_address}")
-        if self.__listener is None:
-            self.__listener = RecorderListener()
-            self.__listener.signals.on_state_change.connect(self.__on_state_change)
-            self.__listener.signals.on_data.connect(self.__handle_data)
-            self.__listener.ip = self.ip_address
-        if self.__connected is False:
-            self.__listener.connect()
-
-    def __on_state_change(self, new_state):
-        if new_state == 3:
-            self.__connected = True
-        else:
-            self.__connected = False
-            self.recording = False
-        self.__emit_status()
-
-    def __handle_data(self, data):
-        rcv = data
-        cmd = rcv[0:3]
-        dat = data[4:]
-        if cmd == 'DAT':
-            if self.__recording is True:
-                records = np.array([np.fromstring(r, sep='#', dtype=np.float64) for r in dat.split('|')])
-                self.__buffer.extend(records)
-                # TODO record no of events received in last x seconds, calculate actual sample rate
-                # if self.__buffer.is_full:
-                #     if self.__buffer.idx[1] % 100 == 0:
-                        # self.signals.on_status_change.emit(self.__format_status())
-                # elif len(self.__buffer) % 100 == 0:
-                #     self.signals.on_status_change.emit(self.__format_status())
-        elif cmd == 'DST':
-            if RecorderConfig.from_dict(json.loads(dat)[0]) == self.__target_config:
-                self.recording = True
-            else:
-                self.recording = False
-                self.__listener.signals.send_target.emit(self.__target_config)
-        elif cmd == 'STR':
-            pass
-        elif rcv == 'ERROR':
-            # TODO reset
-            pass
-        else:
-            # TODO unknown
-            pass
-
-    def disconnect(self):
-        if self.__listener is not None:
-            logger.info(f"Disconnecting from {self.ip_address}")
-            self.__listener.kill()
-            logger.info(f"Disconnected from {self.ip_address}")
-
-    def snap(self):
-        '''
-        :return: a copy of the current data.
-        '''
-        return self.__buffer.unwrap()
-
-
-class RecorderListenerSignals(QObject):
-    on_state_change = Signal(int)
+class RecorderSocketBridgeSignals(QObject):
+    on_socket_state_change = Signal(int)
     on_data = Signal(str)
     send_target = Signal(RecorderConfig)
 
 
-class RecorderListener(QRunnable):
+class RecorderSocketBridge:
+    '''
+    Links a recorder to a socket in a thread safe manner.
+    '''
 
     def __init__(self):
         super().__init__()
         self.__ip = None
-        self.signals = RecorderListenerSignals()
+        self.signals = RecorderSocketBridgeSignals()
         self.__socket = QTcpSocket()
         self.__state = QTcpSocket.UnconnectedState
-        self.__run = True
         self.__socket.stateChanged.connect(self.__on_state_change)
         self.__socket.readyRead.connect(self.__on_data)
         self.signals.send_target.connect(self.__send_target_state)
@@ -288,26 +426,26 @@ class RecorderListener(QRunnable):
         self.__ip = ip
 
     def connect(self):
+        ''' Connects to the underlying socket. '''
         if self.__ip is not None:
             ip, port = self.__ip.split(':')
             self.__socket.connectToHost(ip, int(port))
 
     def __on_state_change(self, new_state):
+        ''' socket connection state change handler '''
         if self.__state != new_state:
             logger.info(f"Connection state change from {self.__state} to {new_state}")
-            # TODO 0 unconnected, 3 connected, 6 closing
             self.__state = new_state
-            self.signals.on_state_change.emit(new_state)
-
-    def run(self):
-        while self.__run:
-            time.sleep(1)
+            self.signals.on_socket_state_change.emit(new_state)
 
     def __on_data(self):
+        ''' waits for data from the socket, decodes it to a string and emits it to the listener. '''
         while self.__socket.canReadLine():
+            logger.debug("Emitting DAT")
             self.signals.on_data.emit(str(self.__socket.readLine().data(), encoding='utf-8'))
 
     def __send_target_state(self, target_state):
+        ''' writes a SET command to the socket. '''
         msg = f"SET|{json.dumps(target_state.to_dict())}\r\n'".encode()
         logger.info(f"Sending {msg} to {self.ip}")
         res = self.__socket.write(msg)
@@ -317,5 +455,6 @@ class RecorderListener(QRunnable):
             logger.warning(f"SET message was not sent to {self.ip}, {res} bytes sent")
 
     def kill(self):
-        self.__run = False
-        self.__socket.disconnectFromHost()
+        ''' Tells the thread to stop running and disconnects the socket. '''
+        if self.__socket is not None:
+            self.__socket.disconnectFromHost()

@@ -3,7 +3,8 @@ import os
 import sys
 
 # matplotlib.use("Qt5Agg")
-from model.signal import SignalStore
+from model.rta import RTA
+from model.vibration import Vibration
 
 os.environ['QT_API'] = 'pyqt5'
 # os.environ['PYQTGRAPH_QT_LIB'] = 'PyQt5'
@@ -14,22 +15,21 @@ if sys.platform == 'win32' and getattr(sys, '_MEIPASS', False):
 
 import pyqtgraph as pg
 import qtawesome as qta
-import numpy as np
 
 from qtpy import QtCore
-from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
-from common import block_signals, format_pg_chart
+from common import block_signals
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
-    SCREEN_WINDOW_STATE, PreferencesDialog, Preferences
+    SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION
 from model.checker import VersionChecker, ReleaseNotesDialog
 from model.log import RollingLogger
 from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
     RECORDER_TARGET_ACCEL_SENS, RECORDER_TARGET_GYRO_ENABLED, RECORDER_TARGET_GYRO_SENS, RECORDER_SAVED_IPS
 from ui.app import Ui_MainWindow
 
-from model.recorders import  RecorderStore, RecorderConfig
+from model.recorders import RecorderStore, RecorderConfig
 
 logger = logging.getLogger('qvibe')
 # logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -45,9 +45,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.logger = logging.getLogger('qvibe')
         self.app = app
         self.preferences = prefs
-        self.__timer = None
-        self.__recorder_store = RecorderStore()
-        self.__signal_store = SignalStore()
+        # basic setup and version checking
         if getattr(sys, 'frozen', False):
             self.__style_path_root = sys._MEIPASS
         else:
@@ -75,29 +73,52 @@ class QVibe(QMainWindow, Ui_MainWindow):
         # pg.setConfigOption('background', matplotlib.colors.to_hex(matplotlib.rcParams['axes.facecolor']))
         # pg.setConfigOption('foreground', matplotlib.colors.to_hex(matplotlib.rcParams['axes.edgecolor']))
         # pg.setConfigOption('leftButtonPan', False)
+        # UI initialisation
         self.setupUi(self)
+        self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
+        self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
+        self.visibleCurves.selectAll()
+        # core domain stores
+        self.__timer = None
+        self.__target_config = self.__load_config()
+        self.__display_target_config()
+        self.__recorder_store = RecorderStore(self.__target_config, self.recordersLayout, self.centralwidget)
+        self.__recorder_store.signals.on_status_change.connect(self.__handle_recorder_connect_event)
+        saved_recorders = self.preferences.get(RECORDER_SAVED_IPS)
+        if saved_recorders is None:
+            self.__recorder_store.append()
+        else:
+            self.__recorder_store.load(saved_recorders.split('|'))
+        target_resolution = f"{self.preferences.get(ANALYSIS_RESOLUTION)} Hz"
+        self.resolutionHz.setCurrentText(target_resolution)
         # menus
         self.log_viewer = RollingLogger(self.preferences, parent=self)
         self.actionShow_Logs.triggered.connect(self.log_viewer.show_logs)
         self.action_Preferences.triggered.connect(self.show_preferences)
-        # live vibe view
-        self.__vibe_x = None
-        self.__vibe_y = None
-        self.__vibe_z = None
-        # recorders
-        self.__target_config = self.__load_config()
-        self.__on_recorder_status_change(False, False)
-        # TODO update y range as sensitivity changes
-        format_pg_chart(self.liveVibrationChart, (0, 30), (-4, 4))
-        address = self.preferences.get(RECORDER_SAVED_IPS)
-        if address is not None:
-            self.ipAddress.setText(address)
-        self.__display_target_config()
+        # buffer
+        self.bufferSize.setValue(self.preferences.get(BUFFER_SIZE))
+        # charts
+        self.__analysers = {
+            0: Vibration(self.liveVibrationChart, self.targetAccelSens, self.bufferSize),
+            1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps)
+        }
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
         self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
-        self.connectRecorderButton.setIcon(qta.icon('fa5s.sign-in-alt'))
-        self.disconnectRecorderButton.setIcon(qta.icon('fa5s.sign-out-alt'))
+
+    def __handle_recorder_connect_event(self, ip, connected):
+        ''' reacts to connection status changes.'''
+        any_connected = self.__recorder_store.any_connected()
+        self.fps.setEnabled(not any_connected)
+        self.bufferSize.setEnabled(not any_connected)
+        if len(self.activeRecorders.findItems(ip, Qt.MatchExactly)) == 0:
+            self.activeRecorders.addItem(ip)
+            for i in self.activeRecorders.findItems(ip, Qt.MatchExactly):
+                i.setSelected(True)
+        if any_connected is True:
+            self.__start_timer()
+        else:
+            self.__stop_timer()
 
     def __start_timer(self):
         '''
@@ -106,30 +127,26 @@ class QVibe(QMainWindow, Ui_MainWindow):
         if self.__timer is None:
             self.__timer = QTimer()
             self.__timer.timeout.connect(self.__collect_signals)
-        self.__timer.start(1.0 / self.fps.value())
+        logger.info(f"Starting data collection timer at {self.fps.value()} fps")
+        self.__timer.start(1000.0 / self.fps.value())
 
     def __stop_timer(self):
         if self.__timer is not None:
+            logger.info('Stopping data collection timer')
             self.__timer.stop()
 
     def __collect_signals(self):
-        ''' collects the latest signal and pushes it into the live vibration view '''
-        signal = self.__recorder_store.snap()
-        if signal is not None and signal.shape[0] > 0:
-            t = signal[:, 0]
-            t = t - np.min(t)
-            t = t/500
-            if self.__vibe_x is None:
-                self.__vibe_x = self.liveVibrationChart.plot(t, signal[:, 2], pen=pg.mkPen('r', width=1))
-                self.__vibe_y = self.liveVibrationChart.plot(t, signal[:, 3], pen=pg.mkPen('g', width=1))
-                self.__vibe_z = self.liveVibrationChart.plot(t, signal[:, 4], pen=pg.mkPen('b', width=1))
+        ''' collects the latest signal and pushes it into the analysers. '''
+        signal, count, idx = self.__recorder_store.snap()
+        if signal is not None:
+            if count > 0:
+                for c in self.__analysers.values():
+                    c.update(signal, idx)
             else:
-                self.__vibe_x.setData(t, signal[:, 2])
-                self.__vibe_y.setData(t, signal[:, 3])
-                self.__vibe_z.setData(t, signal[:, 4])
+                logger.debug(f"No data in snap {idx}")
 
     def update_target(self):
-        ''' updates the current target config from the UI values '''
+        ''' updates the current target config from the UI values. '''
         self.__target_config.fs = self.targetSampleRate.value()
         self.__target_config.samples_per_batch = self.targetBatchSize.value()
         self.__target_config.accelerometer_enabled = self.targetAccelEnabled.isChecked()
@@ -163,35 +180,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
         with block_signals(self.targetGyroSens):
             self.targetGyroSens.setCurrentText(str(self.__target_config.gyro_sens))
 
-    def connect_recorder(self):
-        ''' connects the selected recorder '''
-        rec = self.__recorder_store.connect(self.ipAddress.text(), self.__target_config)
-        rec.signals.on_status_change.connect(self.__on_recorder_status_change)
-        rec_idx = self.activeRecorderSelector.findText(rec.ip_address)
-        if rec_idx == -1:
-            self.activeRecorderSelector.addItem(rec.ip_address)
-
-    def __on_recorder_status_change(self, connected, recording):
-        '''
-        Updates various fields to reflect recorder status.
-        :param connected: true if connected.
-        :param recording: true if actively recording.
-        '''
-        self.connected.setChecked(connected)
-        self.recording.setChecked(recording)
-        self.ipAddress.setEnabled(not connected)
-        self.connectRecorderButton.setEnabled(not connected)
-        self.disconnectRecorderButton.setEnabled(connected)
-        self.fps.setEnabled(not connected)
-        if connected is True:
-            self.__start_timer()
-        else:
-            self.__stop_timer()
-
-    def disconnect_recorder(self):
-        ''' disconnects the selected recorder '''
-        self.__recorder_store.disconnect(self.ipAddress.text())
-
     def reset_target(self):
         ''' resets the target config from preferences. '''
         self.__target_config = self.__load_config()
@@ -205,14 +193,23 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.preferences.set(RECORDER_TARGET_ACCEL_SENS, self.__target_config.accelerometer_sens)
         self.preferences.set(RECORDER_TARGET_GYRO_ENABLED, self.__target_config.gyro_enabled)
         self.preferences.set(RECORDER_TARGET_GYRO_SENS, self.__target_config.gyro_sens)
-        # TODO apply to connected recorders
+        self.__recorder_store.target_config = self.__target_config
 
     def add_new_recorder(self):
-        pass
+        self.__recorder_store.append()
 
     def save_recorders(self):
         ''' Saves the specified recorders to preferences. '''
-        self.preferences.set(RECORDER_SAVED_IPS, self.ipAddress.text())
+        self.preferences.set(RECORDER_SAVED_IPS, '|'.join([r.ip_address for r in self.__recorder_store]))
+
+    def set_buffer_size(self, val):
+        self.preferences.set(BUFFER_SIZE, val)
+        # TODO propagate to the recorders
+        # self.__signal_store.length = val
+
+    def set_visible_chart(self, idx):
+        for c_idx, c in self.__analysers.items():
+            c.visible = idx == c_idx
 
     def show_release_notes(self):
         ''' Shows the release notes '''
@@ -222,11 +219,13 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                                           self.__version,
                                                           signal_anyway=True))
 
-    def show_help(self):
+    @staticmethod
+    def show_help():
         ''' Opens the user guide in a browser '''
-        QDesktopServices.openUrl(QUrl('https://beqdesigner.readthedocs.io/en/latest'))
+        QDesktopServices.openUrl(QUrl('https://qvibe.readthedocs.io/en/latest'))
 
-    def __alert_on_version_check_fail(self, message):
+    @staticmethod
+    def __alert_on_version_check_fail(message):
         '''
         Displays an alert if the version check fails.
         :param message: the message.
@@ -271,7 +270,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         PreferencesDialog(self.preferences, self.__style_path_root, parent=self).exec()
 
-    def showAbout(self):
+    def show_about(self):
         msg_box = QMessageBox()
         msg_box.setText(
             f"<a href='https://github.com/3ll3d00d/qvibe-analyser'>QVibe Analyser</a> v{self.__version} by 3ll3d00d")
@@ -328,6 +327,11 @@ if __name__ == '__main__':
     # show the form and exec the app
     form.show()
     app.exec_()
+
+
+class PlotWidgetForSpectrum(pg.PlotWidget):
+    def __init__(self, parent=None, background='default', **kargs):
+        super().__init__(parent=parent, background=background, **kargs)
 
 
 class PlotWidgetWithDateAxis(pg.PlotWidget):

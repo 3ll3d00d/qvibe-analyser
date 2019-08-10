@@ -108,7 +108,7 @@
    <sender>maxRows</sender>
    <signal>valueChanged(int)</signal>
    <receiver>logsForm</receiver>
-   <slot>setLogSize()</slot>
+   <slot>set_log_size()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>584</x>
@@ -124,7 +124,7 @@
    <sender>logLevel</sender>
    <signal>currentTextChanged(QString)</signal>
    <receiver>logsForm</receiver>
-   <slot>setLogLevel()</slot>
+   <slot>set_log_level()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>551</x>
@@ -138,7 +138,7 @@
   </connection>
  </connections>
  <slots>
-  <slot>setLogSize()</slot>
-  <slot>setLogLevel()</slot>
+  <slot>set_log_size()</slot>
+  <slot>set_log_level()</slot>
  </slots>
 </ui>

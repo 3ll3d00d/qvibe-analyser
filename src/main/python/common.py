@@ -1,3 +1,4 @@
+import time
 from collections import Sequence
 from contextlib import contextmanager
 
@@ -52,6 +53,7 @@ class RingBuffer(Sequence):
         self.__left_idx = 0
         self.__right_idx = 0
         self.__capacity = capacity
+        self.__event_count = 0
 
     def unwrap(self):
         """ Copy the data from this buffer into unwrapped form """
@@ -59,6 +61,18 @@ class RingBuffer(Sequence):
             self.__buffer[self.__left_idx:min(self.__right_idx, self.__capacity)],
             self.__buffer[:max(self.__right_idx - self.__capacity, 0)]
         ))
+
+    def take_event_count(self, if_multiple=None):
+        '''
+        :param if_multiple: if set, only take the event count if it is a multiple of the supplied value.
+        :return: the count of items added since the last take if the count is taken.
+        '''
+        count = self.__event_count
+        if if_multiple is None or count % if_multiple == 0:
+            self.__event_count = 0
+            return count
+        else:
+            return None
 
     def _fix_indices(self):
         """
@@ -105,7 +119,14 @@ class RingBuffer(Sequence):
 
         self.__buffer[self.__right_idx % self.__capacity] = value
         self.__right_idx += 1
+        self.__event_count += 1
         self._fix_indices()
+
+    def peek(self):
+        if len(self) == 0:
+            return None
+        res = self.__buffer[(self.__right_idx % self.__capacity) - 1]
+        return res
 
     def append_left(self, value):
         if self.is_full:
@@ -117,22 +138,7 @@ class RingBuffer(Sequence):
         self.__left_idx -= 1
         self._fix_indices()
         self.__buffer[self.__left_idx] = value
-
-    def pop(self):
-        if len(self) == 0:
-            raise IndexError("pop from an empty RingBuffer")
-        self.__right_idx -= 1
-        self._fix_indices()
-        res = self.__buffer[self.__right_idx % self.__capacity]
-        return res
-
-    def pop_left(self):
-        if len(self) == 0:
-            raise IndexError("pop from an empty RingBuffer")
-        res = self.__buffer[self.__left_idx]
-        self.__left_idx += 1
-        self._fix_indices()
-        return res
+        self.__event_count += 1
 
     def extend(self, values):
         lv = len(values)
@@ -154,7 +160,7 @@ class RingBuffer(Sequence):
         self.__right_idx += lv
 
         self.__left_idx = max(self.__left_idx, self.__right_idx - self.__capacity)
-        self._fix_indices()
+        self.__event_count += len(values)
 
     def extend_left(self, values):
         lv = len(values)
@@ -177,6 +183,7 @@ class RingBuffer(Sequence):
         self.__buffer[sl2] = values[sl1.stop - sl1.start:]
 
         self.__right_idx = min(self.__right_idx, self.__left_idx + self.__capacity)
+        self.__event_count += len(values)
 
     def __len__(self):
         return self.__right_idx - self.__left_idx
@@ -219,6 +226,8 @@ def format_pg_chart(chart, x_lim, y_lim):
     '''
     Applies a standard format to a pyqtgraph chart.
     :param chart: the chart.
+    :param x_lim: the x axis limits.
+    :param y_lim: the y axis limits.
     '''
     label_font = QFont()
     fp = FontProperties()
@@ -228,7 +237,7 @@ def format_pg_chart(chart, x_lim, y_lim):
         chart.getPlotItem().getAxis(name).setTickFont(label_font)
     chart.getPlotItem().showGrid(x=True, y=True, alpha=0.5)
     chart.getPlotItem().disableAutoRange()
-    chart.getPlotItem().setLimits(xMin=0.0, xMax=x_lim[1], yMin=y_lim[0], yMax=y_lim[1])
+    chart.getPlotItem().setLimits(xMin=x_lim[0], xMax=x_lim[1], yMin=0, yMax=150)
     chart.getPlotItem().setXRange(*x_lim, padding=0.0)
     chart.getPlotItem().setYRange(*y_lim, padding=0.0)
     chart.getPlotItem().setDownsampling(ds=True, auto=True, mode='peak')

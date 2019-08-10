@@ -56,8 +56,8 @@ class Ui_logsForm(object):
         logsForm.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(logsForm)
-        self.maxRows.valueChanged['int'].connect(logsForm.setLogSize)
-        self.logLevel.currentTextChanged['QString'].connect(logsForm.setLogLevel)
+        self.maxRows.valueChanged['int'].connect(logsForm.set_log_size)
+        self.logLevel.currentTextChanged['QString'].connect(logsForm.set_log_level)
         QtCore.QMetaObject.connectSlotsByName(logsForm)
 
     def retranslateUi(self, logsForm):
