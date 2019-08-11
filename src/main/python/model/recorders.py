@@ -272,12 +272,12 @@ class RecorderStore(Sequence):
         '''
         :return: current data for each recorder.
         '''
-        # TODO support n recorders
+        # TODO support n active recorders
         if len(self) > 0:
-            rec = self[0]
-            if rec.connected is True:
-                return rec.snap()
-        return None
+            for rec in self:
+                if rec.connected is True:
+                    return rec.snap()
+        return [None] * 3
 
     def __on_recorder_connect_event(self, ip, connected):
         '''

@@ -16,14 +16,26 @@ logger = logging.getLogger('qvibe.signal')
 
 class TriAxisSignal:
 
-    def __init__(self, preferences, data, fs, resolution_shift, pre_calc=False):
+    def __init__(self, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False):
         self.__has_data = pre_calc
-        self.__x = Signal(preferences, data[:, 2], fs, resolution_shift, pre_calc=pre_calc)
-        self.__y = Signal(preferences, data[:, 3], fs, resolution_shift, pre_calc=pre_calc)
-        self.__z = Signal(preferences, data[:, 4], fs, resolution_shift, pre_calc=pre_calc)
+        self.__raw = data
+        self.__mode = mode
+        self.__x = Signal(preferences, data[:, 2], fs, resolution_shift, mode=mode, pre_calc=pre_calc)
+        self.__y = Signal(preferences, data[:, 3], fs, resolution_shift, mode=mode, pre_calc=pre_calc)
+        self.__z = Signal(preferences, data[:, 4], fs, resolution_shift, mode=mode, pre_calc=pre_calc)
+
+    def set_mode(self, mode, recalc=True):
+        self.__mode = mode
+        self.__x.set_mode(mode, recalc=recalc)
+        self.__y.set_mode(mode, recalc=recalc)
+        self.__z.set_mode(mode, recalc=recalc)
 
     def has_data(self):
         return self.__has_data
+
+    @property
+    def time(self):
+        return self.__raw[:, 0]
 
     @property
     def x(self):
@@ -38,6 +50,7 @@ class TriAxisSignal:
         return self.__z
 
     def recalc(self):
+        self.__has_data = True
         self.x.recalc()
         self.y.recalc()
         self.z.recalc()
@@ -70,47 +83,77 @@ class Signal:
         :param pre_calc: if True, calculate the required views.
         '''
         self.__preferences = preferences
-        if mode == 'vibration':
-            self.__data = butter(fs, data, 'high')
-        elif mode == 'tilt':
-            self.__data = butter(fs, data, 'low')
-        else:
-            self.__data = data
+        self.__raw_data = data
+        self.__data = None
+        self.__output = {}
         self.__fs = fs
+        self.__analyse_data(mode)
         self.__resolution_shift = resolution_shift
-        avg = self.__calculate_avg() if pre_calc is True else None
-        self.__output = {
-            'avg': avg
-        }
+        if pre_calc is True:
+            self.recalc()
+
+    def __analyse_data(self, mode):
+        if mode.lower() == 'vibration':
+            self.__data = butter(self.fs, self.raw, 'high')
+        elif mode.lower() == 'tilt':
+            self.__data = butter(self.fs, self.raw, 'low')
+        else:
+            self.__data = self.raw
+
+    def set_mode(self, mode, recalc=True):
+        '''
+        Analyses the raw data in the specified mode.
+        :param mode: the mode.
+        :param recalc: if true, trigger a recalc.
+        '''
+        self.__analyse_data(mode)
+        if recalc is True:
+            self.recalc()
+
+    @property
+    def raw(self):
+        return self.__raw_data
+
+    @property
+    def data(self):
+        return self.__data
 
     def recalc(self):
-        self.__output['avg'] = self.__calculate_avg()
+        avg, peak = self.__calculate()
+        self.__output['avg'] = avg
+        self.__output['peak'] = peak
 
     @property
     def avg(self):
         ''' The x-y data for the avg spectrum. '''
         return self.__output['avg']
 
+    def get_analysis(self, view_name):
+        '''
+        :param view_name: the named analysis view.
+        :return: the analysis if any.
+        '''
+        if view_name in self.__output:
+            return self.__output[view_name]
+        return None
+
     @property
     def fs(self):
         return self.__fs
 
-    def __calculate_avg(self):
-        from model.preferences import ANALYSIS_RESOLUTION, ANALYSIS_AVG_WINDOW
-        resolution = self.__preferences.get(ANALYSIS_RESOLUTION)
-        resolution_shift = int(math.log(resolution, 2))
-        # peak_wnd = self.__get_window(self.__preferences, ANALYSIS_PEAK_WINDOW)
+    def __calculate(self):
+        from model.preferences import ANALYSIS_AVG_WINDOW,ANALYSIS_PEAK_WINDOW
+        peak_wnd = get_window(self.__preferences, ANALYSIS_PEAK_WINDOW)
         avg_wnd = get_window(self.__preferences, ANALYSIS_AVG_WINDOW)
-        avg = self.avg_spectrum(resolution_shift=resolution_shift, window=avg_wnd, average='mean')
-        # self.__peak = self.peak_spectrum(resolution_shift=resolution_shift, window=peak_wnd)
-        return Analysis(avg)
+        avg = self.avg_spectrum(resolution_shift=self.__resolution_shift, window=avg_wnd, average='mean')
+        peak = self.peak_spectrum(resolution_shift=self.__resolution_shift, window=peak_wnd)
+        return Analysis(avg), Analysis(peak)
 
     def avg_spectrum(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None, **kwargs):
         """
         analyses the source to generate the linear spectrum.
         :param ref: the reference value for dB purposes.
         :param resolution_shift: allows resolution to go down (if positive) or up (if negative).
-        :param mode: cq or none.
         :return:
             f : ndarray
             Array of sample frequencies.
@@ -121,9 +164,32 @@ class Signal:
         f, Pxx_spec = signal.welch(self.__data, self.fs, nperseg=nperseg, scaling='spectrum', detrend=False,
                                    window=window if window else 'hann', **kwargs)
         # a 3dB adjustment is required to account for the change in nperseg
-        Pxx_spec = amplitude_to_db(np.nan_to_num(np.sqrt(Pxx_spec)), ADJUST_BY_3DB * REF_ACCELERATION_IN_G)
+        Pxx_spec = amplitude_to_db(np.nan_to_num(np.sqrt(Pxx_spec)), ADJUST_BY_3DB * ref)
         return f, Pxx_spec
-        # return rescale_x(f, Pxx_spec)
+
+    def peak_spectrum(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None):
+        """
+        analyses the source to generate the max values per bin per segment
+        :param resolution_shift: allows resolution to go down (if positive) or up (if negative).
+        :param window: window type.
+        :return:
+            f : ndarray
+            Array of sample frequencies.
+            Pxx : ndarray
+            linear spectrum max values.
+        """
+        nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
+        freqs, _, Pxy = signal.spectrogram(self.__data,
+                                           self.fs,
+                                           window=window if window else ('tukey', 0.25),
+                                           nperseg=int(nperseg),
+                                           noverlap=int(nperseg // 2),
+                                           detrend=False,
+                                           scaling='spectrum')
+        Pxy_max = np.sqrt(Pxy.max(axis=-1).real)
+        # a 3dB adjustment is required to account for the change in nperseg
+        Pxy_max = amplitude_to_db(Pxy_max, ref=ADJUST_BY_3DB * ref)
+        return freqs, Pxy_max
 
 
 def butter(fs, data, btype, f3=2, order=2):

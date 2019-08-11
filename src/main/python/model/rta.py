@@ -1,12 +1,10 @@
 import logging
-import math
 
 import numpy as np
 import pyqtgraph as pg
 
 from common import RingBuffer, format_pg_chart
 from model.charts import VisibleChart, ChartEvent
-from model.signal import TriAxisSignal, get_segment_length
 
 logger = logging.getLogger('qvibe.rta')
 
@@ -14,70 +12,62 @@ logger = logging.getLogger('qvibe.rta')
 class RTAEvent(ChartEvent):
 
     def __init__(self, chart, input, idx, preferences):
-        super().__init__(chart, input, idx)
-        self.preferences = preferences
+        super().__init__(chart, input, idx, preferences)
 
     def process(self):
+        super().process()
         if self.input.shape[0] >= self.chart.min_nperseg:
-            self.output = TriAxisSignal(self.preferences,
-                                        self.input,
-                                        self.chart.fs,
-                                        self.chart.resolution_shift,
-                                        pre_calc=self.chart.visible)
+            self.output.recalc()
             self.should_emit = True
+        else:
+            self.should_emit = False
 
 
 class RTA(VisibleChart):
 
-    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget):
-        super().__init__(False, coelesce=True)
+    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, rta_average_widget, rta_view_widget):
+        self.__average = None
+        super().__init__(prefs, fs_widget, resolution_widget, False, coelesce=True)
         self.__x = None
         self.__y = None
         self.__z = None
         self.__sum = None
-        self.__resolution_shift = None
         self.__buffer = None
-        self.__fs = None
         self.__fps = None
-        self.__min_nperseg = 0
         self.__update_rate = None
+        self.__active_view = None
         self.__chart = chart
-        self.__preferences = prefs
-        self.__on_resolution_change(resolution_widget.currentText())
-        self.__on_fs_change(fs_widget.value())
+        self.__average_samples = -1
         self.__on_fps_change(fps_widget.value())
-        # link to widgets
-        fs_widget.valueChanged['int'].connect(self.__on_fs_change)
         fps_widget.valueChanged['int'].connect(self.__on_fps_change)
-        resolution_widget.currentTextChanged.connect(self.__on_resolution_change)
-        format_pg_chart(self.__chart, (0, self.fs / 2), (40, 120))
+        self.__on_average_change(rta_average_widget.currentText())
+        rta_average_widget.currentTextChanged.connect(self.__on_average_change)
+        self.__on_rta_view_change(rta_view_widget.currentText())
+        rta_view_widget.currentTextChanged.connect(self.__on_rta_view_change)
+        format_pg_chart(self.__chart, (0, self.fs / 2), (0, 150), (40, 120))
 
-    @property
-    def min_nperseg(self):
-        return self.__min_nperseg
+    def __on_rta_view_change(self, view):
+        self.__active_view = view
+        self.do_update(None)
 
-    @property
-    def resolution_shift(self):
-        return self.__resolution_shift
+    def __on_average_change(self, average):
+        self.__average = average
+        if self.__average == 'Forever':
+            self.__average_samples = -1
+        else:
+            self.__average_samples = self.min_nperseg * int(self.__average[0:-1])
+        logger.info(f"Average mode updated to {average}, requires {self.__average_samples} samples")
 
-    @property
-    def fs(self):
-        return self.__fs
+    def on_min_nperseg_change(self):
+        if self.__average is not None:
+            self.__on_average_change(self.__average)
 
     def make_event(self, data, idx):
-        return RTAEvent(self, data, idx, self.__preferences)
-
-    def __cache_nperseg(self):
-        if self.resolution_shift is not None and self.fs is not None:
-            self.__min_nperseg = get_segment_length(self.fs, resolution_shift=self.resolution_shift)
-
-    def __on_fs_change(self, fs):
-        self.__fs = fs
-        self.__cache_nperseg()
-
-    def __on_resolution_change(self, resolution):
-        self.__resolution_shift = int(math.log(float(resolution[0:-3]), 2))
-        self.__cache_nperseg()
+        if self.__average_samples == -1 or len(data) <= self.__average_samples:
+            d = data
+        else:
+            d = data[-self.__average_samples:]
+        return RTAEvent(self, d, idx, self.preferences)
 
     def __on_fps_change(self, fps):
         self.__fps = fps
@@ -96,10 +86,23 @@ class RTA(VisibleChart):
                 data.recalc()
             if data.has_data():
                 if self.__x is None:
-                    self.__x = self.__chart.plot(data.x.avg.x, data.x.avg.y, pen=pg.mkPen('r', width=1))
-                    self.__y = self.__chart.plot(data.y.avg.x, data.y.avg.x, pen=pg.mkPen('g', width=1))
-                    self.__z = self.__chart.plot(data.z.avg.x, data.z.avg.x, pen=pg.mkPen('b', width=1))
+                    self.__x = self.__plot_new(data, 'x', 'r')
+                    self.__y = self.__plot_new(data, 'y', 'g')
+                    self.__z = self.__plot_new(data, 'z', 'b')
                 else:
-                    self.__x.setData(data.x.avg.x, data.x.avg.y)
-                    self.__y.setData(data.y.avg.x, data.y.avg.y)
-                    self.__z.setData(data.z.avg.x, data.z.avg.y)
+                    self.__update_existing(self.__x, data, 'x')
+                    self.__update_existing(self.__y, data, 'y')
+                    self.__update_existing(self.__z, data, 'z')
+
+    def __plot_new(self, data, axis, colour):
+        view = self.__get_view(axis, data)
+        return self.__chart.plot(view.x, view.y, pen=pg.mkPen(colour, width=1))
+
+    def __get_view(self, axis, data):
+        sig = getattr(data, axis)
+        view = sig.get_analysis(self.__active_view)
+        return view
+
+    def __update_existing(self, chart, data, axis):
+        view = self.__get_view(axis, data)
+        chart.setData(view.x, view.y)

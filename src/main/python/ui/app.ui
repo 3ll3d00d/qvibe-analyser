@@ -194,7 +194,7 @@
          </attribute>
          <layout class="QGridLayout" name="gridLayout_3">
           <item row="0" column="0">
-           <widget class="QComboBox" name="comboBox">
+           <widget class="QComboBox" name="vibrationAnalysis">
             <item>
              <property name="text">
               <string>Vibration</string>
@@ -239,8 +239,77 @@
           <string>RTA</string>
          </attribute>
          <layout class="QGridLayout" name="gridLayout_2">
-          <item row="0" column="0">
+          <item row="1" column="0">
            <widget class="PlotWidgetForSpectrum" name="rtaChart"/>
+          </item>
+          <item row="0" column="0">
+           <layout class="QHBoxLayout" name="rtaControlsLayout">
+            <item>
+             <widget class="QLabel" name="rtaAverageLabel">
+              <property name="text">
+               <string>Averages</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="rtaAverage">
+              <item>
+               <property name="text">
+                <string>1x</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>2x</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>5x</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Forever</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="rtaViewLabel">
+              <property name="text">
+               <string>View</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="rtaView">
+              <item>
+               <property name="text">
+                <string>avg</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>peak</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
           </item>
          </layout>
         </widget>
@@ -718,22 +787,6 @@
     <hint type="destinationlabel">
      <x>757</x>
      <y>251</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>addRecorderButton</sender>
-   <signal>clicked()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>add_new_recorder()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>875</x>
-     <y>345</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>284</x>
-     <y>265</y>
     </hint>
    </hints>
   </connection>

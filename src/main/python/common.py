@@ -241,12 +241,13 @@ class TimeAxisItem(pg.AxisItem):
         return [str(datetime.timedelta(seconds=value)).split('.')[0] for value in values]
 
 
-def format_pg_chart(chart, x_lim, y_lim):
+def format_pg_chart(chart, x_lim, y_lim, y_range=None):
     '''
     Applies a standard format to a pyqtgraph chart.
     :param chart: the chart.
     :param x_lim: the x axis limits.
     :param y_lim: the y axis limits.
+    :param y_range: the visible y limits.
     '''
     label_font = QFont()
     fp = FontProperties()
@@ -256,8 +257,11 @@ def format_pg_chart(chart, x_lim, y_lim):
         chart.getPlotItem().getAxis(name).setTickFont(label_font)
     chart.getPlotItem().showGrid(x=True, y=True, alpha=0.5)
     chart.getPlotItem().disableAutoRange()
-    chart.getPlotItem().setLimits(xMin=x_lim[0], xMax=x_lim[1], yMin=0, yMax=150)
+    chart.getPlotItem().setLimits(xMin=x_lim[0], xMax=x_lim[1], yMin=y_lim[0], yMax=y_lim[1])
     chart.getPlotItem().setXRange(*x_lim, padding=0.0)
-    chart.getPlotItem().setYRange(*y_lim, padding=0.0)
+    if y_range is None:
+        chart.getPlotItem().setYRange(*y_lim, padding=0.0)
+    else:
+        chart.getPlotItem().setYRange(*y_range, padding=0.0)
     chart.getPlotItem().setDownsampling(ds=True, auto=True, mode='peak')
     chart.getPlotItem().layout.setContentsMargins(10, 20, 30, 20)
