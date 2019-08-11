@@ -5,16 +5,16 @@ import numpy as np
 import pyqtgraph as pg
 
 from common import RingBuffer, format_pg_chart
-from model.charts import VisibleChart, ChartDataProcessor
+from model.charts import VisibleChart, ChartEvent
 from model.signal import TriAxisSignal, get_segment_length
 
 logger = logging.getLogger('qvibe.rta')
 
 
-class RTADataProcessor(ChartDataProcessor):
+class RTAEvent(ChartEvent):
 
-    def __init__(self, chart, preferences):
-        super().__init__(chart)
+    def __init__(self, chart, input, idx, preferences):
+        super().__init__(chart, input, idx)
         self.preferences = preferences
 
     def process(self):
@@ -30,7 +30,7 @@ class RTADataProcessor(ChartDataProcessor):
 class RTA(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget):
-        super().__init__(False)
+        super().__init__(False, coelesce=True)
         self.__x = None
         self.__y = None
         self.__z = None
@@ -64,8 +64,8 @@ class RTA(VisibleChart):
     def fs(self):
         return self.__fs
 
-    def get_data_processor(self):
-        return RTADataProcessor(self, self.__preferences)
+    def make_event(self, data, idx):
+        return RTAEvent(self, data, idx, self.__preferences)
 
     def __cache_nperseg(self):
         if self.resolution_shift is not None and self.fs is not None:
@@ -86,18 +86,20 @@ class RTA(VisibleChart):
         if old_buf is not None:
             self.__buffer.extend(old_buf)
 
-    def do_update(self, data, was_invisible):
-        self.__buffer.append(data)
+    def do_update(self, data):
         if data is not None:
-            if was_invisible is True:
+            self.__buffer.append(data)
+        elif len(self.__buffer) > 0:
+            data = self.__buffer.peek()
+        if data is not None:
+            if data.has_data() is False:
                 data.recalc()
-            if self.__x is None:
-                self.__x = self.__chart.plot(data.x.avg.x, data.x.avg.y, pen=pg.mkPen('r', width=1))
-                self.__y = self.__chart.plot(data.y.avg.x, data.y.avg.x, pen=pg.mkPen('g', width=1))
-                self.__z = self.__chart.plot(data.z.avg.x, data.z.avg.x, pen=pg.mkPen('b', width=1))
-            else:
-                self.__x.setData(data.x.avg.x, data.x.avg.y)
-                self.__y.setData(data.y.avg.x, data.y.avg.y)
-                self.__z.setData(data.z.avg.x, data.z.avg.y)
-
-
+            if data.has_data():
+                if self.__x is None:
+                    self.__x = self.__chart.plot(data.x.avg.x, data.x.avg.y, pen=pg.mkPen('r', width=1))
+                    self.__y = self.__chart.plot(data.y.avg.x, data.y.avg.x, pen=pg.mkPen('g', width=1))
+                    self.__z = self.__chart.plot(data.z.avg.x, data.z.avg.x, pen=pg.mkPen('b', width=1))
+                else:
+                    self.__x.setData(data.x.avg.x, data.x.avg.y)
+                    self.__y.setData(data.y.avg.x, data.y.avg.y)
+                    self.__z.setData(data.z.avg.x, data.z.avg.y)

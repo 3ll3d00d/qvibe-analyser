@@ -112,9 +112,26 @@ class QVibe(QMainWindow, Ui_MainWindow):
             0: Vibration(self.liveVibrationChart, self.targetAccelSens, self.bufferSize),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps)
         }
+        self.__start_analysers()
+
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
         self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
+
+    def __start_analysers(self):
+        for a in self.__analysers.values():
+            logger.info(f"Starting processor for {a.__class__.__name__}")
+            QThreadPool.globalInstance().reserveThread()
+            a.processor.start()
+
+            def stop_processor():
+                logger.info(f"Stopping processor for {a.__class__.__name__}")
+                a.processor.stop()
+                QThreadPool.globalInstance().releaseThread()
+                logger.info(f"Stopped processor for {a.__class__.__name__}")
+
+            self.app.aboutToQuit.connect(stop_processor)
+            logger.info(f"Started processor for {a.__class__.__name__}")
 
     def __handle_recorder_connect_event(self, ip, connected):
         ''' reacts to connection status changes.'''
@@ -151,10 +168,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         if signal is not None:
             if count > 0:
                 for c in self.__analysers.values():
-                    proc = c.get_data_processor()
-                    proc.input = signal
-                    proc.idx = idx
-                    QThreadPool.globalInstance().start(proc)
+                    c.accept(signal, idx)
 
     def update_target(self):
         ''' updates the current target config from the UI values. '''

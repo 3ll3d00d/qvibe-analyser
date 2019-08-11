@@ -4,7 +4,7 @@ import numpy as np
 import pyqtgraph as pg
 
 from common import format_pg_chart
-from model.charts import VisibleChart, ChartDataProcessor
+from model.charts import VisibleChart, ChartEvent
 
 logger = logging.getLogger('qvibe.vibration')
 
@@ -36,7 +36,7 @@ class Vibration(VisibleChart):
         if self.__buffer_size is not None and self.__sens is not None:
             format_pg_chart(self.__chart, (0, self.__buffer_size), (-self.__sens, self.__sens))
 
-    def do_update(self, data, was_invisible=False):
+    def do_update(self, data):
         '''
         updates the chart with the latest signal.
         '''
@@ -53,4 +53,4 @@ class Vibration(VisibleChart):
             self.__z.setData(t, data[:, 4])
 
     def get_data_processor(self):
-        return ChartDataProcessor(self)
+        return ChartEvent(self)

@@ -17,9 +17,13 @@ logger = logging.getLogger('qvibe.signal')
 class TriAxisSignal:
 
     def __init__(self, preferences, data, fs, resolution_shift, pre_calc=False):
+        self.__has_data = pre_calc
         self.__x = Signal(preferences, data[:, 2], fs, resolution_shift, pre_calc=pre_calc)
         self.__y = Signal(preferences, data[:, 3], fs, resolution_shift, pre_calc=pre_calc)
         self.__z = Signal(preferences, data[:, 4], fs, resolution_shift, pre_calc=pre_calc)
+
+    def has_data(self):
+        return self.__has_data
 
     @property
     def x(self):
