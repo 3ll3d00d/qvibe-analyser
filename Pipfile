@@ -15,6 +15,7 @@ requests = "*"
 markdown = "*"
 semver = "*"
 matplotlib = "*"
+twisted = "*"
 
 [dev-packages]
 pytest = "*"

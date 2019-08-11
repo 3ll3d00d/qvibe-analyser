@@ -17,10 +17,10 @@ import pyqtgraph as pg
 import qtawesome as qta
 
 from qtpy import QtCore
-from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QRunnable
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
-from common import block_signals
+from common import block_signals, ReactorRunner
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION
 from model.checker import VersionChecker, ReleaseNotesDialog
@@ -78,11 +78,21 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
         self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
         self.visibleCurves.selectAll()
+        # run a twisted reactor as its responsiveness is embarrassingly better than QTcpSocket
+        from twisted.internet import reactor
+        self.__reactor = reactor
+        runner = ReactorRunner(self.__reactor)
+        QThreadPool.globalInstance().reserveThread()
+        QThreadPool.globalInstance().start(runner)
+        self.app.aboutToQuit.connect(runner.stop)
         # core domain stores
         self.__timer = None
         self.__target_config = self.__load_config()
         self.__display_target_config()
-        self.__recorder_store = RecorderStore(self.__target_config, self.recordersLayout, self.centralwidget)
+        self.__recorder_store = RecorderStore(self.__target_config,
+                                              self.recordersLayout,
+                                              self.centralwidget,
+                                              self.__reactor)
         self.__recorder_store.signals.on_status_change.connect(self.__handle_recorder_connect_event)
         saved_recorders = self.preferences.get(RECORDER_SAVED_IPS)
         if saved_recorders is None:
@@ -141,9 +151,10 @@ class QVibe(QMainWindow, Ui_MainWindow):
         if signal is not None:
             if count > 0:
                 for c in self.__analysers.values():
-                    c.update(signal, idx)
-            else:
-                logger.debug(f"No data in snap {idx}")
+                    proc = c.get_data_processor()
+                    proc.input = signal
+                    proc.idx = idx
+                    QThreadPool.globalInstance().start(proc)
 
     def update_target(self):
         ''' updates the current target config from the UI values. '''

@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import Sequence
 from contextlib import contextmanager
@@ -6,8 +7,24 @@ import numpy as np
 import pyqtgraph as pg
 from matplotlib.font_manager import FontProperties
 from qtpy import QtCore
+from qtpy.QtCore import QRunnable
 from qtpy.QtGui import QCursor, QFont
 from qtpy.QtWidgets import QApplication
+
+logger = logging.getLogger('qta.common')
+
+
+class ReactorRunner(QRunnable):
+    def __init__(self, reactor):
+        super().__init__()
+        self.__reactor = reactor
+
+    def run(self):
+        self.__reactor.run(installSignalHandlers=False)
+
+    def stop(self):
+        self.__reactor.callFromThread(self.__reactor.stop)
+        time.sleep(0.5)
 
 
 @contextmanager
@@ -125,7 +142,9 @@ class RingBuffer(Sequence):
     def peek(self):
         if len(self) == 0:
             return None
-        res = self.__buffer[(self.__right_idx % self.__capacity) - 1]
+        idx = (self.__right_idx % self.__capacity) - 1
+        logger.debug(f"Peeking at idx {idx}")
+        res = self.__buffer[idx]
         return res
 
     def append_left(self, value):

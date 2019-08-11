@@ -1,15 +1,30 @@
 import logging
 import math
-import time
 
 import numpy as np
 import pyqtgraph as pg
 
 from common import RingBuffer, format_pg_chart
+from model.charts import VisibleChart, ChartDataProcessor
 from model.signal import TriAxisSignal, get_segment_length
-from model.vibration import VisibleChart
 
 logger = logging.getLogger('qvibe.rta')
+
+
+class RTADataProcessor(ChartDataProcessor):
+
+    def __init__(self, chart, preferences):
+        super().__init__(chart)
+        self.preferences = preferences
+
+    def process(self):
+        if self.input.shape[0] >= self.chart.min_nperseg:
+            self.output = TriAxisSignal(self.preferences,
+                                        self.input,
+                                        self.chart.fs,
+                                        self.chart.resolution_shift,
+                                        pre_calc=self.chart.visible)
+            self.should_emit = True
 
 
 class RTA(VisibleChart):
@@ -35,11 +50,26 @@ class RTA(VisibleChart):
         fs_widget.valueChanged['int'].connect(self.__on_fs_change)
         fps_widget.valueChanged['int'].connect(self.__on_fps_change)
         resolution_widget.currentTextChanged.connect(self.__on_resolution_change)
-        format_pg_chart(self.__chart, (0, self.__fs / 2), (40, 120))
+        format_pg_chart(self.__chart, (0, self.fs / 2), (40, 120))
+
+    @property
+    def min_nperseg(self):
+        return self.__min_nperseg
+
+    @property
+    def resolution_shift(self):
+        return self.__resolution_shift
+
+    @property
+    def fs(self):
+        return self.__fs
+
+    def get_data_processor(self):
+        return RTADataProcessor(self, self.__preferences)
 
     def __cache_nperseg(self):
-        if self.__resolution_shift is not None and self.__fs is not None:
-            self.__min_nperseg = get_segment_length(self.__fs, resolution_shift=self.__resolution_shift)
+        if self.resolution_shift is not None and self.fs is not None:
+            self.__min_nperseg = get_segment_length(self.fs, resolution_shift=self.resolution_shift)
 
     def __on_fs_change(self, fs):
         self.__fs = fs
@@ -56,28 +86,18 @@ class RTA(VisibleChart):
         if old_buf is not None:
             self.__buffer.extend(old_buf)
 
-    def on_signal(self, signal, idx):
-        if signal.shape[0] >= self.__min_nperseg:
-            start = time.time()
-            tri = TriAxisSignal(self.__preferences, signal, self.__fs, self.__resolution_shift, pre_calc=self.visible)
-            end = time.time()
-            logger.debug(f"Created TriAxisSignal {idx} in {round((end-start)*1000.0, 3)}ms [precalc={self.visible}]")
-            self.__buffer.append(tri)
-            return True
-        return False
-
-    def do_update(self, was_invisible=False):
-        tri = self.__buffer.peek()
-        if tri is not None:
+    def do_update(self, data, was_invisible):
+        self.__buffer.append(data)
+        if data is not None:
             if was_invisible is True:
-                tri.recalc()
+                data.recalc()
             if self.__x is None:
-                self.__x = self.__chart.plot(tri.x.avg.x, tri.x.avg.y, pen=pg.mkPen('r', width=1))
-                self.__y = self.__chart.plot(tri.y.avg.x, tri.y.avg.x, pen=pg.mkPen('g', width=1))
-                self.__z = self.__chart.plot(tri.z.avg.x, tri.z.avg.x, pen=pg.mkPen('b', width=1))
+                self.__x = self.__chart.plot(data.x.avg.x, data.x.avg.y, pen=pg.mkPen('r', width=1))
+                self.__y = self.__chart.plot(data.y.avg.x, data.y.avg.x, pen=pg.mkPen('g', width=1))
+                self.__z = self.__chart.plot(data.z.avg.x, data.z.avg.x, pen=pg.mkPen('b', width=1))
             else:
-                self.__x.setData(tri.x.avg.x, tri.x.avg.y)
-                self.__y.setData(tri.y.avg.x, tri.y.avg.y)
-                self.__z.setData(tri.z.avg.x, tri.z.avg.y)
+                self.__x.setData(data.x.avg.x, data.x.avg.y)
+                self.__y.setData(data.y.avg.x, data.y.avg.y)
+                self.__z.setData(data.z.avg.x, data.z.avg.y)
 
 

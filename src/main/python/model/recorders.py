@@ -3,11 +3,12 @@ import logging
 import time
 from collections import Sequence
 
-import qtawesome as qta
 import numpy as np
+import qtawesome as qta
 from qtpy import QtWidgets, QtCore
-from qtpy.QtCore import QObject, Signal
-from qtpy.QtNetwork import QTcpSocket
+from qtpy.QtCore import QObject, Signal, QThreadPool
+from twisted.internet.protocol import connectionDone
+from twisted.protocols.basic import LineReceiver
 
 from common import RingBuffer
 
@@ -20,11 +21,12 @@ class RecorderSignals(QObject):
 
 class Recorder:
 
-    def __init__(self, idx, parent_layout, parent, target_config):
+    def __init__(self, idx, parent_layout, parent, target_config, reactor):
         ''' Adds widgets to the main screen to display another recorder. '''
         self.__target_config = target_config
         self.signals = RecorderSignals()
         self.__name = None
+        self.__reactor = reactor
         self.__listener = None
         # TODO get buffer size
         self.__buffer_size = 30
@@ -157,19 +159,19 @@ class Recorder:
         ''' Creates a RecorderListener if required and then connects it. '''
         logger.info(f"Connecting to {self.ip_address}")
         if self.__listener is None:
-            self.__listener = RecorderSocketBridge()
+            self.__listener = RecorderTwistedBridge(self.__reactor)
             self.__listener.signals.on_socket_state_change.connect(self.__on_state_change)
             self.__listener.signals.on_data.connect(self.__handle_data)
             self.__listener.ip = self.ip_address
         if self.connected is False:
-            self.__listener.connect()
+            self.__reactor.callFromThread(self.__listener.connect)
 
     def __on_state_change(self, new_state):
         '''
         Reacts to connection state changes to determine if we are connected or not
         propagates that status via a signal
         '''
-        if new_state == 3:
+        if new_state is True:
             self.connected = True
         else:
             self.connected = False
@@ -209,6 +211,8 @@ class Recorder:
         if self.__listener is not None:
             logger.info(f"Disconnecting from {self.ip_address}")
             self.__listener.kill()
+            self.__listener = None
+            QThreadPool.globalInstance().releaseThread()
             logger.info(f"Disconnected from {self.ip_address}")
 
     def snap(self):
@@ -220,7 +224,7 @@ class Recorder:
         c = self.__buffer.take_event_count()
         self.__snap_idx += 1
         end = time.time()
-        logger.debug(f"Snap {self.__snap_idx} in {round((end-start) * 1000, 3)}ms")
+        logger.debug(f"Snap {self.__snap_idx} : {c} in {round((end-start) * 1000, 3)}ms")
         return b, c, self.__snap_idx
 
 
@@ -228,12 +232,13 @@ class RecorderStore(Sequence):
     '''
     Stores all recorders known to the system.
     '''
-    def __init__(self, target_config, parent_layout, parent):
+    def __init__(self, target_config, parent_layout, parent, reactor):
         self.signals = RecorderSignals()
         self.__parent_layout = parent_layout
         self.__parent = parent
         self.__recorders = []
         self.__target_config = target_config
+        self.__reactor = reactor
 
     @property
     def target_config(self):
@@ -247,7 +252,7 @@ class RecorderStore(Sequence):
 
     def append(self):
         ''' adds a new recorder. '''
-        rec = Recorder(len(self.__recorders), self.__parent_layout, self.__parent, self.__target_config)
+        rec = Recorder(len(self.__recorders), self.__parent_layout, self.__parent, self.__target_config, self.__reactor)
         rec.signals.on_status_change.connect(self.__on_recorder_connect_event)
         self.__recorders.append(rec)
         return rec
@@ -397,24 +402,22 @@ class RecorderConfig:
 
 
 class RecorderSocketBridgeSignals(QObject):
-    on_socket_state_change = Signal(int)
+    on_socket_state_change = Signal(bool)
     on_data = Signal(str)
     send_target = Signal(RecorderConfig)
 
 
-class RecorderSocketBridge:
-    '''
-    Links a recorder to a socket in a thread safe manner.
-    '''
+class RecorderTwistedBridge:
 
-    def __init__(self):
+    def __init__(self, reactor):
         super().__init__()
+        self.__reactor = reactor
         self.__ip = None
         self.signals = RecorderSocketBridgeSignals()
-        self.__socket = QTcpSocket()
-        self.__state = QTcpSocket.UnconnectedState
-        self.__socket.stateChanged.connect(self.__on_state_change)
-        self.__socket.readyRead.connect(self.__on_data)
+        self.__endpoint = None
+        self.__protocol = None
+        self.__connect = None
+        self.__state = 0
         self.signals.send_target.connect(self.__send_target_state)
 
     @property
@@ -426,10 +429,14 @@ class RecorderSocketBridge:
         self.__ip = ip
 
     def connect(self):
-        ''' Connects to the underlying socket. '''
-        if self.__ip is not None:
-            ip, port = self.__ip.split(':')
-            self.__socket.connectToHost(ip, int(port))
+        ''' Runs the twisted reactor. '''
+        from twisted.internet.endpoints import TCP4ClientEndpoint
+        from twisted.internet.endpoints import connectProtocol
+        logger.info(f"Starting Twisted endpoint on {self.ip}")
+        ip, port = self.ip.split(':')
+        self.__endpoint = TCP4ClientEndpoint(self.__reactor, ip, int(port))
+        self.__protocol = RecorderProtocol(self.signals.on_data, self.__on_state_change)
+        self.__connect = connectProtocol(self.__endpoint, self.__protocol)
 
     def __on_state_change(self, new_state):
         ''' socket connection state change handler '''
@@ -438,23 +445,51 @@ class RecorderSocketBridge:
             self.__state = new_state
             self.signals.on_socket_state_change.emit(new_state)
 
-    def __on_data(self):
-        ''' waits for data from the socket, decodes it to a string and emits it to the listener. '''
-        while self.__socket.canReadLine():
-            logger.debug("Emitting DAT")
-            self.signals.on_data.emit(str(self.__socket.readLine().data(), encoding='utf-8'))
-
     def __send_target_state(self, target_state):
         ''' writes a SET command to the socket. '''
         msg = f"SET|{json.dumps(target_state.to_dict())}\r\n'".encode()
         logger.info(f"Sending {msg} to {self.ip}")
-        res = self.__socket.write(msg)
-        if self.__socket.flush() is True:
-            logger.info(f"Sent {res} byte SET msg to {self.ip}")
-        else:
-            logger.warning(f"SET message was not sent to {self.ip}, {res} bytes sent")
+        self.__protocol.write(msg)
+        logger.info(f"Sent {msg} to {self.ip}")
 
     def kill(self):
-        ''' Tells the thread to stop running and disconnects the socket. '''
-        if self.__socket is not None:
-            self.__socket.disconnectFromHost()
+        ''' Tells the reactor to stop running and disconnects the socket. '''
+        if self.__protocol is not None:
+            if self.__protocol.transport is not None:
+                logger.info("Stopping the twisted protocol")
+                self.__protocol.transport.loseConnection()
+                logger.info("Stopped the twisted protocol")
+            elif self.__connect is not None:
+                logger.info("Cancelling connection attempt")
+                self.__reactor.callFromThread(self.__connect.cancel)
+                logger.info("Cancelled connection attempt")
+
+
+class RecorderProtocol(LineReceiver):
+    ''' Bridges the twisted network handler to/from Qt signals. '''
+
+    def __init__(self, on_data, on_state_change):
+        super().__init__()
+        self.__on_data = on_data
+        self.__on_state_change = on_state_change
+
+    def rawDataReceived(self, data):
+        pass
+
+    def connectionMade(self):
+        logger.info("Connection established, sending state change")
+        self.transport.setTcpNoDelay(True)
+        self.__on_state_change(True)
+
+    def connectionLost(self, reason=connectionDone):
+        logger.info(f"Connection lost because {reason}, sending state change")
+        self.__on_state_change(False)
+
+    def lineReceived(self, line):
+        logger.debug("Emitting DAT")
+        self.__on_data.emit(line.decode())
+
+    def write(self, line):
+        ''' writes a SET command to the socket. '''
+        logger.debug("Sending SET")
+        self.sendLine(line)
