@@ -109,7 +109,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.bufferSize.setValue(self.preferences.get(BUFFER_SIZE))
         # charts
         self.__analysers = {
-            0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.resolutionHz,
+            0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.resolutionHz,
                          self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps,
                    self.rtaAverage, self.rtaView)

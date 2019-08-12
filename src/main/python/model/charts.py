@@ -6,6 +6,7 @@ from queue import Queue, Empty
 
 from qtpy.QtCore import QObject, Signal, QThread
 
+from model.log import to_millis
 from model.signal import TriAxisSignal, get_segment_length
 
 logger = logging.getLogger('qvibe.charts')
@@ -64,22 +65,30 @@ class ChartProcessor(QThread):
 
 class ChartEvent:
     ''' Allows preprocessing of fresh data for a chart to occur away from the main thread. '''
-    def __init__(self, chart, input, idx, preferences, analysis_mode='vibration'):
+    def __init__(self, chart, input, idx, preferences, budget_millis, analysis_mode='vibration'):
         super().__init__()
         self.chart = chart
         self.input = input
         self.idx = idx
         self.preferences = preferences
         self.__analysis_mode = analysis_mode
+        self.__budget_millis = budget_millis * 0.9
         self.should_emit = False
         self.output = None
 
     def execute(self):
         start = time.time()
         self.process()
+        mid = time.time()
         self.handle_data()
         end = time.time()
-        logger.debug(f"{self.chart.__class__.__name__} : {self.idx} in {round((end - start) * 1000, 3)}ms")
+        elapsed_millis = to_millis(start, end)
+        if elapsed_millis > self.__budget_millis:
+            mid_millis = to_millis(start, mid)
+            emit_millis = round(elapsed_millis - mid_millis, 3)
+            logger.warning(f"{self.chart.__class__.__name__} : {self.idx} in {mid_millis}ms - {emit_millis}ms but budget is {self.__budget_millis}ms")
+        else:
+            logger.debug(f"{self.chart.__class__.__name__} : {self.idx} in {elapsed_millis}ms")
 
     def process(self):
         ''' default implementation passes through the input '''
@@ -102,7 +111,8 @@ class ChartSignals(QObject):
 
 class VisibleChart:
 
-    def __init__(self, prefs, fs_widget, resolution_widget, visible, coelesce=False, analysis_mode='vibration'):
+    def __init__(self, prefs, fs_widget, resolution_widget, fps_widget, visible,
+                 coelesce=False, analysis_mode='vibration'):
         self.signals = ChartSignals()
         self.processor = ChartProcessor(coelesce=coelesce)
         self.signals.new_data.connect(self.do_update)
@@ -111,6 +121,8 @@ class VisibleChart:
         self.__analysis_mode = analysis_mode
         self.__resolution_shift = None
         self.__fs = None
+        self.__fps = None
+        self.__budget_millis = None
         self.__min_nperseg = 0
         self.__received_data_with_invisible = False
         self.__on_resolution_change(resolution_widget.currentText())
@@ -118,6 +130,26 @@ class VisibleChart:
         # link to widgets
         fs_widget.valueChanged['int'].connect(self.__on_fs_change)
         resolution_widget.currentTextChanged.connect(self.__on_resolution_change)
+        self.__on_fps_change(fps_widget.value())
+        fps_widget.valueChanged['int'].connect(self.__on_fps_change)
+
+    @property
+    def fps(self):
+        return self.__fps
+
+    @property
+    def budget_millis(self):
+        return self.__budget_millis
+
+    def __on_fps_change(self, fps):
+        changed = fps != self.fps
+        self.__fps = fps
+        self.__budget_millis = 1000.0 / fps
+        if changed is True:
+            self.when_fps_changed()
+
+    def when_fps_changed(self):
+        pass
 
     @property
     def analysis_mode(self):
@@ -189,4 +221,4 @@ class VisibleChart:
         :param idx: the index.
         :return: the event.
         '''
-        return ChartEvent(self, data, idx, self.preferences, analysis_mode=self.analysis_mode)
+        return ChartEvent(self, data, idx, self.preferences, self.budget_millis, analysis_mode=self.analysis_mode)

@@ -12,6 +12,7 @@ from ui.logs import Ui_logsForm
 class LogViewer(QMainWindow, Ui_logsForm):
     change_level = Signal(str)
     set_size = Signal(int)
+    set_exclude_filter = Signal(str)
 
     '''
     A window which displays logging.
@@ -43,6 +44,9 @@ class LogViewer(QMainWindow, Ui_logsForm):
         :param level: the new level.
         '''
         self.change_level.emit(level)
+
+    def set_excludes(self):
+        self.set_exclude_filter.emit(self.excludes.text())
 
     def refresh(self, data):
         '''
@@ -76,6 +80,7 @@ class RollingLogger(logging.Handler):
         self.__visible = False
         self.__window = None
         self.__preferences = preferences
+        self.__excludes = []
         self.parent = parent
         self.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(threadName)s	- %(name)s - %(funcName)s - %(message)s'))
         level = self.__preferences.get(LOGGING_LEVEL)
@@ -94,8 +99,9 @@ class RollingLogger(logging.Handler):
 
     def emit(self, record):
         msg = self.format(record)
-        self.__buffer.append(msg)
-        self.__signals.append_msg.emit(msg)
+        if not any(e in msg for e in self.__excludes):
+            self.__buffer.append(msg)
+            self.__signals.append_msg.emit(msg)
 
     def show_logs(self):
         '''
@@ -105,11 +111,25 @@ class RollingLogger(logging.Handler):
             self.__window = LogViewer(len(self.__buffer))
             self.__window.set_size.connect(self.set_size)
             self.__window.change_level.connect(self.change_level)
+            self.__window.set_exclude_filter.connect(self.set_excludes)
             self.__signals.append_msg.connect(self.__window.append_msg)
             level_idx = self.__window.logLevel.findText(self.__levelName)
             self.__window.logLevel.setCurrentIndex(level_idx)
         self.__window.show()
         self.__window.refresh(self.__buffer)
+
+    def set_excludes(self, excludes):
+        self.__excludes = excludes.split(',')
+        if len(self.__excludes) > 0:
+            old_buf = self.__buffer
+            self.__buffer = RingBuffer(old_buf.maxlen, dtype=np.object)
+            for m in old_buf:
+                if any(e in m for e in self.__excludes):
+                    pass
+                else:
+                    self.__buffer.append(m)
+            if self.__window is not None:
+                self.__window.refresh(self.__buffer)
 
     def set_size(self, size):
         '''

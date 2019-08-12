@@ -11,9 +11,10 @@ logger = logging.getLogger('qvibe.vibration')
 
 class Vibration(VisibleChart):
 
-    def __init__(self, chart, prefs, fs_widget, resolution_widget, accel_sens_widget, buffer_size_widget,
+    def __init__(self, chart, prefs, fs_widget, fps_widget, resolution_widget, accel_sens_widget, buffer_size_widget,
                  analysis_type_widget):
-        super().__init__(prefs, fs_widget, resolution_widget, True, analysis_mode=analysis_type_widget.currentText())
+        super().__init__(prefs, fs_widget, resolution_widget, fps_widget,
+                         True, analysis_mode=analysis_type_widget.currentText())
         self.__x = None
         self.__y = None
         self.__z = None

@@ -1,9 +1,8 @@
 import logging
 
-import numpy as np
 import pyqtgraph as pg
 
-from common import RingBuffer, format_pg_chart
+from common import format_pg_chart
 from model.charts import VisibleChart, ChartEvent
 
 logger = logging.getLogger('qvibe.rta')
@@ -11,11 +10,13 @@ logger = logging.getLogger('qvibe.rta')
 
 class RTAEvent(ChartEvent):
 
-    def __init__(self, chart, input, idx, preferences):
-        super().__init__(chart, input, idx, preferences)
+    def __init__(self, chart, input, idx, preferences, budget_millis, view):
+        super().__init__(chart, input, idx, preferences, budget_millis)
+        self.__view = view
 
     def process(self):
         super().process()
+        self.output.set_view(self.__view, recalc=False)
         if self.input.shape[0] >= self.chart.min_nperseg:
             self.output.recalc()
             self.should_emit = True
@@ -27,19 +28,16 @@ class RTA(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, rta_average_widget, rta_view_widget):
         self.__average = None
-        super().__init__(prefs, fs_widget, resolution_widget, False, coelesce=True)
+        super().__init__(prefs, fs_widget, resolution_widget, fps_widget, False, coelesce=True)
         self.__x = None
         self.__y = None
         self.__z = None
         self.__sum = None
-        self.__buffer = None
-        self.__fps = None
+        self.__cache = None
         self.__update_rate = None
         self.__active_view = None
         self.__chart = chart
         self.__average_samples = -1
-        self.__on_fps_change(fps_widget.value())
-        fps_widget.valueChanged['int'].connect(self.__on_fps_change)
         self.__on_average_change(rta_average_widget.currentText())
         rta_average_widget.currentTextChanged.connect(self.__on_average_change)
         self.__on_rta_view_change(rta_view_widget.currentText())
@@ -48,7 +46,9 @@ class RTA(VisibleChart):
 
     def __on_rta_view_change(self, view):
         self.__active_view = view
-        self.do_update(None)
+        if self.__cache is not None:
+            self.__cache.set_view(view)
+            self.do_update(None)
 
     def __on_average_change(self, average):
         self.__average = average
@@ -67,20 +67,13 @@ class RTA(VisibleChart):
             d = data
         else:
             d = data[-self.__average_samples:]
-        return RTAEvent(self, d, idx, self.preferences)
-
-    def __on_fps_change(self, fps):
-        self.__fps = fps
-        old_buf = self.__buffer
-        self.__buffer = RingBuffer(fps, dtype=np.object)
-        if old_buf is not None:
-            self.__buffer.extend(old_buf)
+        return RTAEvent(self, d, idx, self.preferences, self.budget_millis, self.__active_view)
 
     def do_update(self, data):
         if data is not None:
-            self.__buffer.append(data)
-        elif len(self.__buffer) > 0:
-            data = self.__buffer.peek()
+            self.__cache = data
+        elif self.__cache is not None:
+            data = self.__cache
         if data is not None:
             if data.has_data() is False:
                 data.recalc()
@@ -105,4 +98,7 @@ class RTA(VisibleChart):
 
     def __update_existing(self, chart, data, axis):
         view = self.__get_view(axis, data)
-        chart.setData(view.x, view.y)
+        if view is not None:
+            chart.setData(view.x, view.y)
+        else:
+            logger.error(f"No {self.__active_view} data available")

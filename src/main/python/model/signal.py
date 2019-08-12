@@ -1,10 +1,11 @@
 import logging
-import math
 import time
 
 import numpy as np
 from scipy import signal
 from scipy.interpolate import PchipInterpolator
+
+from model.log import to_millis
 
 ADJUST_BY_3DB = 1 / (2 ** 0.5)
 # 1 micro m/s2 in G produces 0dB means 1G = ~140dB, 0.1G = ~120dB, 0.01G = ~100dB, 0.001G = ~80dB and 0.0001G = ~60dB
@@ -16,13 +17,23 @@ logger = logging.getLogger('qvibe.signal')
 
 class TriAxisSignal:
 
-    def __init__(self, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False):
+    def __init__(self, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False, view_mode='avg'):
         self.__has_data = pre_calc
         self.__raw = data
         self.__mode = mode
-        self.__x = Signal(preferences, data[:, 2], fs, resolution_shift, mode=mode, pre_calc=pre_calc)
-        self.__y = Signal(preferences, data[:, 3], fs, resolution_shift, mode=mode, pre_calc=pre_calc)
-        self.__z = Signal(preferences, data[:, 4], fs, resolution_shift, mode=mode, pre_calc=pre_calc)
+        self.__view = view_mode
+        self.__x = Signal('x', preferences, data[:, 2], fs, resolution_shift, mode=mode, pre_calc=pre_calc,
+                          view_mode=view_mode)
+        self.__y = Signal('y', preferences, data[:, 3], fs, resolution_shift, mode=mode, pre_calc=pre_calc,
+                          view_mode=view_mode)
+        self.__z = Signal('z', preferences, data[:, 4], fs, resolution_shift, mode=mode, pre_calc=pre_calc,
+                          view_mode=view_mode)
+
+    def set_view(self, view, recalc=True):
+        self.__view = view
+        self.__x.set_view(view, recalc=recalc)
+        self.__y.set_view(view, recalc=recalc)
+        self.__z.set_view(view, recalc=recalc)
 
     def set_mode(self, mode, recalc=True):
         self.__mode = mode
@@ -72,7 +83,7 @@ class Analysis:
 
 class Signal:
 
-    def __init__(self, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False):
+    def __init__(self, name, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False, view_mode='avg'):
         '''
         Creates a new signal.
         :param preferences: common prefs.
@@ -82,11 +93,13 @@ class Signal:
         :param mode: optional analysis mode, can be none (raw data), vibration or tilt.
         :param pre_calc: if True, calculate the required views.
         '''
+        self.__name = name
         self.__preferences = preferences
         self.__raw_data = data
         self.__data = None
         self.__output = {}
         self.__fs = fs
+        self.__view_mode = view_mode
         self.__analyse_data(mode)
         self.__resolution_shift = resolution_shift
         if pre_calc is True:
@@ -110,6 +123,16 @@ class Signal:
         if recalc is True:
             self.recalc()
 
+    def set_view(self, view, recalc=True):
+        '''
+        Analyses the raw data in the specified mode.
+        :param mode: the mode.
+        :param recalc: if true, trigger a recalc.
+        '''
+        self.__view_mode = view
+        if recalc is True:
+            self.recalc()
+
     @property
     def raw(self):
         return self.__raw_data
@@ -119,14 +142,10 @@ class Signal:
         return self.__data
 
     def recalc(self):
-        avg, peak = self.__calculate()
-        self.__output['avg'] = avg
-        self.__output['peak'] = peak
-
-    @property
-    def avg(self):
-        ''' The x-y data for the avg spectrum. '''
-        return self.__output['avg']
+        start = time.time()
+        self.__output[self.__view_mode] = self.__calculate()
+        end = time.time()
+        logger.debug(f"Recalc {self.__name} in {to_millis(start, end)}ms")
 
     def get_analysis(self, view_name):
         '''
@@ -142,14 +161,37 @@ class Signal:
         return self.__fs
 
     def __calculate(self):
-        from model.preferences import ANALYSIS_AVG_WINDOW,ANALYSIS_PEAK_WINDOW
-        peak_wnd = get_window(self.__preferences, ANALYSIS_PEAK_WINDOW)
-        avg_wnd = get_window(self.__preferences, ANALYSIS_AVG_WINDOW)
-        avg = self.avg_spectrum(resolution_shift=self.__resolution_shift, window=avg_wnd, average='mean')
-        peak = self.peak_spectrum(resolution_shift=self.__resolution_shift, window=peak_wnd)
-        return Analysis(avg), Analysis(peak)
+        if self.__view_mode == 'avg':
+            from model.preferences import ANALYSIS_AVG_WINDOW
+            avg_wnd = get_window(self.__preferences, ANALYSIS_AVG_WINDOW)
+            return Analysis(self.__avg_spectrum(resolution_shift=self.__resolution_shift, window=avg_wnd))
+        elif self.__view_mode == 'peak':
+            from model.preferences import ANALYSIS_PEAK_WINDOW
+            peak_wnd = get_window(self.__preferences, ANALYSIS_PEAK_WINDOW)
+            return Analysis(self.__peak_spectrum(resolution_shift=self.__resolution_shift, window=peak_wnd))
+        elif self.__view_mode == 'psd':
+            from model.preferences import ANALYSIS_AVG_WINDOW
+            avg_wnd = get_window(self.__preferences, ANALYSIS_AVG_WINDOW)
+            return Analysis(self.__psd(resolution_shift=self.__resolution_shift, window=avg_wnd))
 
-    def avg_spectrum(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None, **kwargs):
+    def __psd(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None, **kwargs):
+        """
+        analyses the source to generate the PSD.
+        :param ref: the reference value for dB purposes.
+        :param resolution_shift: allows resolution to go down (if positive) or up (if negative).
+        :return:
+            f : ndarray
+            Array of sample frequencies.
+            Pxx : ndarray
+            psd.
+        """
+        nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
+        f, Pxx_den = signal.welch(self.__data, self.fs, nperseg=nperseg, detrend=False,
+                                  window=window if window else 'hann', **kwargs)
+        Pxx_den = power_to_db(np.nan_to_num(np.sqrt(Pxx_den)), ref)
+        return f, Pxx_den
+
+    def __avg_spectrum(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None, **kwargs):
         """
         analyses the source to generate the linear spectrum.
         :param ref: the reference value for dB purposes.
@@ -167,7 +209,7 @@ class Signal:
         Pxx_spec = amplitude_to_db(np.nan_to_num(np.sqrt(Pxx_spec)), ADJUST_BY_3DB * ref)
         return f, Pxx_spec
 
-    def peak_spectrum(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None):
+    def __peak_spectrum(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None):
         """
         analyses the source to generate the max values per bin per segment
         :param resolution_shift: allows resolution to go down (if positive) or up (if negative).
@@ -224,22 +266,34 @@ def get_window(preferences, key):
     return window
 
 
-def amplitude_to_db(s, ref=1.0):
+def amplitude_to_db(s, ref=1.0, amin=1e-10):
     '''
     Convert an amplitude spectrogram to dB-scaled spectrogram. Implementation taken from librosa to avoid adding a
     dependency on librosa for a few util functions.
     :param s: the amplitude spectrogram.
+    :param ref: the reference value.
+    :param amin: min value.
+    :return: s_db : np.ndarray ``s`` measured in dB
+    '''
+    return power_to_db(np.square(np.abs(np.asarray(s))), ref=ref**2, amin=amin**2)
+
+
+def power_to_db(s, ref=1.0, amin=1e-20):
+    '''
+    Convert an amplitude spectrogram to dB-scaled spectrogram. Implementation taken from librosa to avoid adding a
+    dependency on librosa for a few util functions.
+    :param s: the amplitude spectrogram.
+    :param ref: the reference value.
+    :param amin: min value.
     :return: s_db : np.ndarray ``s`` measured in dB
     '''
     magnitude = np.abs(np.asarray(s))
-    power = np.square(magnitude, out=magnitude)
-    ref_power = np.abs(ref ** 2)
-    amin = 1e-20
+    ref_value = np.abs(ref)
     top_db = 80.0
-    log_spec = 10.0 * np.log10(np.maximum(amin, power))
-    log_spec -= 10.0 * np.log10(np.maximum(amin, ref_power))
+    log_spec = 10.0 * np.log10(np.maximum(amin, magnitude))
+    log_spec -= 10.0 * np.log10(np.maximum(amin, ref_value))
     log_spec = np.maximum(log_spec, log_spec.max() - top_db)
-    return log_spec
+    return np.nan_to_num(log_spec)
 
 
 def rescale_x(x, y):
@@ -252,7 +306,7 @@ def rescale_x(x, y):
         start = time.time()
         x2, y2 = interp(x, y, steps)
         end = time.time()
-        logger.debug(f"Interpolation from {len(x)} to {len(x2)} in {round((end - start) * 1000, 3)}ms")
+        logger.debug(f"Interpolation from {len(x)} to {len(x2)} in {to_millis(start, end)}ms")
         return x2, y2
 
 
@@ -265,7 +319,7 @@ def interp(x1, y1, x2, smooth=False):
     else:
         y2 = np.interp(x2, x1, y1)
     end = time.time()
-    logger.debug(f"Interpolation from {len(x1)} to {len(x2)} in {round((end - start) * 1000, 3)}ms")
+    logger.debug(f"Interpolation from {len(x1)} to {len(x2)} in {to_millis(start, end)}ms")
     return x2, y2
 
 

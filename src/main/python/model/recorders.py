@@ -11,6 +11,7 @@ from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 
 from common import RingBuffer
+from model.log import to_millis
 
 logger = logging.getLogger('qvibe.recorders')
 
@@ -224,7 +225,7 @@ class Recorder:
         c = self.__buffer.take_event_count()
         self.__snap_idx += 1
         end = time.time()
-        logger.debug(f"Snap {self.__snap_idx} : {c} in {round((end-start) * 1000, 3)}ms")
+        logger.debug(f"Snap {self.__snap_idx} : {c} in {to_millis(start, end)}ms")
         return b, c, self.__snap_idx
 
 

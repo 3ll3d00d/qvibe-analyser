@@ -11,7 +11,7 @@ from qtpy.QtCore import QRunnable
 from qtpy.QtGui import QCursor, QFont
 from qtpy.QtWidgets import QApplication
 
-logger = logging.getLogger('qta.common')
+logger = logging.getLogger('qvibe.common')
 
 
 class ReactorRunner(QRunnable):
