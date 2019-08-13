@@ -17,19 +17,20 @@ logger = logging.getLogger('qvibe.signal')
 
 class TriAxisSignal:
 
-    def __init__(self, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
+    def __init__(self, preferences, recorder_name, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
                  view_mode='avg'):
         self.__has_data = pre_calc
         self.__raw = data
         self.__mode = mode
         self.__view = view_mode
         self.__idx = idx
-        self.__x = Signal('x', preferences, data[:, 2], fs, resolution_shift, idx=idx, mode=mode, pre_calc=pre_calc,
-                          view_mode=view_mode)
-        self.__y = Signal('y', preferences, data[:, 3], fs, resolution_shift, idx=idx, mode=mode, pre_calc=pre_calc,
-                          view_mode=view_mode)
-        self.__z = Signal('z', preferences, data[:, 4], fs, resolution_shift, idx=idx, mode=mode, pre_calc=pre_calc,
-                          view_mode=view_mode)
+        self.__recorder_name = recorder_name
+        self.__x = Signal(f"{recorder_name}:x", preferences, data[:, 2], fs, resolution_shift, idx=idx, mode=mode,
+                          pre_calc=pre_calc, view_mode=view_mode)
+        self.__y = Signal(f"{recorder_name}:y", preferences, data[:, 3], fs, resolution_shift, idx=idx, mode=mode,
+                          pre_calc=pre_calc, view_mode=view_mode)
+        self.__z = Signal(f"{recorder_name}:z", preferences, data[:, 4], fs, resolution_shift, idx=idx, mode=mode,
+                          pre_calc=pre_calc, view_mode=view_mode)
 
     def set_view(self, view, recalc=True):
         self.__view = view
@@ -45,6 +46,10 @@ class TriAxisSignal:
 
     def has_data(self):
         return self.__has_data
+
+    @property
+    def recorder_name(self):
+        return self.__recorder_name
 
     @property
     def time(self):
@@ -112,6 +117,10 @@ class Signal:
         self.__resolution_shift = resolution_shift
         if pre_calc is True:
             self.recalc()
+
+    @property
+    def name(self):
+        return self.__name
 
     def __analyse_data(self, mode):
         if mode.lower() == 'vibration':

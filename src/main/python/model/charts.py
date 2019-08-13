@@ -30,11 +30,14 @@ class ChartProcessor(QThread):
                 if event is not None:
                     self.queue.task_done()
                     if self.__coelesce is True:
-                        event = self.coalesce(event)
-                    if isinstance(event, ChartEvent):
-                        event.execute()
+                        events = self.coalesce(event)
                     else:
-                        logger.warning(f"{self.__class__.__name__} received unknown event {event.__class__.__name__}")
+                        events = [event]
+                    for e in events:
+                        if isinstance(e, ChartEvent):
+                            e.execute()
+                        else:
+                            logger.warning(f"{self.__class__.__name__} received unknown event {event.__class__.__name__}")
             except Empty:
                 # ignore, don't care
                 pass
@@ -43,31 +46,32 @@ class ChartProcessor(QThread):
 
     def coalesce(self, event):
         '''
-        Yields the last event from the queue.
+        Yields the last event from the queue for each recorder.
         :param event: the 1st event.
         :return: the last event.
         '''
-        e = None
+        events = {event.recorder_name: event}
         count = 0
         while not self.queue.empty():
             try:
                 e = self.queue.get(block=False, timeout=None)
                 if e is not None:
+                    events[e.recorder_name] = e
                     self.queue.task_done()
                     count += 1
             except Empty:
                 continue
-        if e is not None:
-            logger.warning(f"Coalesced {count} {e.__class__.__name__} events")
-            event = e
-        return event
+        if count > 0:
+            logger.warning(f"Coalesced {count} {event.__class__.__name__} events")
+        return list(events.values())
 
 
 class ChartEvent:
     ''' Allows preprocessing of fresh data for a chart to occur away from the main thread. '''
-    def __init__(self, chart, input, idx, preferences, budget_millis, analysis_mode='vibration'):
+    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, analysis_mode='vibration'):
         super().__init__()
         self.chart = chart
+        self.recorder_name = recorder_name
         self.input = input
         self.idx = idx
         self.preferences = preferences
@@ -94,6 +98,7 @@ class ChartEvent:
         ''' default implementation passes through the input '''
         self.should_emit = True
         self.output = TriAxisSignal(self.preferences,
+                                    self.recorder_name,
                                     self.input,
                                     self.chart.fs,
                                     self.chart.resolution_shift,
@@ -129,8 +134,9 @@ class VisibleChart:
         self.__budget_millis = None
         self.__min_nperseg = 0
         self.__ticks = 0
-        self.__cached = None
+        self.__cached = {}
         self.__received_data_with_invisible = False
+        self.__visible_series = []
         self.__on_resolution_change(resolution_widget.currentText())
         self.__on_fs_change(fs_widget.value())
         # link to widgets
@@ -139,10 +145,20 @@ class VisibleChart:
         self.__on_fps_change(fps_widget.value())
         fps_widget.valueChanged['int'].connect(self.__on_fps_change)
 
+    def set_visible_series(self, series):
+        ''' changes the visible series. '''
+        self.__visible_series = series
+        # TODO update the charts
+        # self.update_chart()
+
     def set_actual_fps(self):
         ''' pushes the tick count to the actual fps widget. '''
         self.__actual_fps_widget.setValue(self.__ticks)
         self.__ticks = 0
+
+    @property
+    def visible_series(self):
+        return self.__visible_series
 
     @property
     def fps(self):
@@ -210,7 +226,7 @@ class VisibleChart:
         if to_update is not None:
             if self.visible is True:
                 start = time.time()
-                self.update_chart()
+                self.update_chart(data.recorder_name)
                 end = time.time()
                 self.__ticks += 1
                 logger.debug(f"Updated {self.__class__.__name__} {to_update.idx} in {to_millis(start, end)} ms")
@@ -222,13 +238,14 @@ class VisibleChart:
         Accepts the fresh data into the cache for the chart.
         :param data: the data.
         '''
-        self.__cached = data
-        return self.__cached
+        self.__cached[data.recorder_name] = data
+        return data
 
     @abc.abstractmethod
-    def update_chart(self):
+    def update_chart(self, recorder_name):
         '''
         Update the chart with the cached data if necessary.
+        :param recorder_name: the named update.
         '''
         pass
 
@@ -258,19 +275,22 @@ class VisibleChart:
         self.__resolution_shift = int(math.log(float(resolution[0:-3]), 2))
         self.__cache_nperseg()
 
-    def accept(self, data, idx):
+    def accept(self, recorder_name, data, idx):
         '''
         Pushes a data event into the queue.
+        :param recorder_name: the name.
         :param data: the data.
         :param idx: the index.
         '''
-        self.processor.queue.put(self.make_event(data, idx), block=False)
+        self.processor.queue.put(self.make_event(recorder_name, data, idx), block=False)
 
-    def make_event(self, data, idx):
+    def make_event(self, recorder_name, data, idx):
         '''
         makes the ChartEvent for this chart.
+        :param recorder_name: the name.
         :param data: the data.
         :param idx: the index.
         :return: the event.
         '''
-        return ChartEvent(self, data, idx, self.preferences, self.budget_millis, analysis_mode=self.analysis_mode)
+        return ChartEvent(self, recorder_name, data, idx, self.preferences, self.budget_millis,
+                          analysis_mode=self.analysis_mode)

@@ -79,7 +79,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
         self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
-        self.visibleCurves.selectAll()
         # run a twisted reactor as its responsiveness is embarrassingly better than QTcpSocket
         from twisted.internet import reactor
         self.__reactor = reactor
@@ -123,6 +122,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
         self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
+        self.visibleCurves.selectAll()
 
     def reset_recording(self):
         self.__recorder_store.reset()
@@ -181,11 +181,11 @@ class QVibe(QMainWindow, Ui_MainWindow):
         elapsed = round((time.time() * 1000) - self.__start_time)
         new_time = QTime(0, 0, 0, 0).addMSecs(elapsed)
         self.elapsedTime.setTime(new_time)
-        signal, count, idx = self.__recorder_store.snap()
-        if signal is not None:
+        snaps = self.__recorder_store.snap()
+        for name, signal, count, idx in snaps:
             if count > 0:
                 for c in self.__analysers.values():
-                    c.accept(signal, idx)
+                    c.accept(name, signal, idx)
 
     def update_target(self):
         ''' updates the current target config from the UI values. '''
@@ -252,6 +252,18 @@ class QVibe(QMainWindow, Ui_MainWindow):
     def set_visible_chart(self, idx):
         for c_idx, c in self.__analysers.items():
             c.visible = (idx == c_idx)
+
+    def set_visible_curves(self):
+        self.__update_plot_visibility()
+
+    def set_visible_recorders(self):
+        self.__update_plot_visibility()
+
+    def __update_plot_visibility(self):
+        series = [f"{n.text()}:{c.text()}" for n in self.activeRecorders.selectedItems() for c in self.visibleCurves.selectedItems()]
+        logger.info(f"Setting visible series [{series}]")
+        for c in self.__analysers.values():
+            c.set_visible_series(series)
 
     def show_release_notes(self):
         ''' Shows the release notes '''

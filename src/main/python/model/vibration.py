@@ -15,13 +15,10 @@ class Vibration(VisibleChart):
                  buffer_size_widget, analysis_type_widget):
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          True, analysis_mode=analysis_type_widget.currentText())
-        self.__x = None
-        self.__y = None
-        self.__z = None
+        self.__series = {}
         self.__chart = chart
         self.__sens = None
         self.__buffer_size = None
-        self.__cached = None
         buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
         analysis_type_widget.currentTextChanged.connect(self.__on_analysis_mode_change)
         accel_sens_widget.currentTextChanged.connect(self.__on_sens_change)
@@ -31,9 +28,9 @@ class Vibration(VisibleChart):
     def __on_analysis_mode_change(self, analysis_mode):
         logger.info(f"Changing analysis mode from {self.analysis_mode} to {analysis_mode}")
         self.analysis_mode = analysis_mode
-        if self.__cached is not None:
-            self.__cached.set_mode(self.analysis_mode, recalc=False)
-            self.do_update(None)
+        for name in self.cached.keys():
+            self.cached[name].set_mode(self.analysis_mode, recalc=False)
+            self.update_chart(name)
 
     def __on_buffer_size_change(self, size):
         self.__buffer_size = size
@@ -48,26 +45,24 @@ class Vibration(VisibleChart):
             format_pg_chart(self.__chart, (0, self.__buffer_size), (-self.__sens, self.__sens))
 
     def reset_chart(self):
-        if self.__x is not None:
-            self.__chart.removeItem(self.__x)
-            self.__chart.removeItem(self.__y)
-            self.__chart.removeItem(self.__z)
-            self.__x = None
-            self.__y = None
-            self.__z = None
+        for c in self.__series.values():
+            self.__chart.removeItem(c)
+        self.__series = {}
 
-    def update_chart(self):
+    def update_chart(self, recorder_name):
         '''
         updates the chart with the latest signal.
         '''
-        if self.cached is not None:
-            d = self.cached
+        d = self.cached.get(recorder_name, None)
+        if d is not None:
             t = (d.time - np.min(d.time))/500
-            if self.__x is None:
-                self.__x = self.__chart.plot(t, d.x.data, pen=pg.mkPen('r', width=1))
-                self.__y = self.__chart.plot(t, d.y.data, pen=pg.mkPen('g', width=1))
-                self.__z = self.__chart.plot(t, d.z.data, pen=pg.mkPen('b', width=1))
+            self.create_or_update(d.x, t, 'r')
+            self.create_or_update(d.y, t, 'g')
+            self.create_or_update(d.z, t, 'b')
+
+    def create_or_update(self, series, t, colour):
+        if series.name in self.visible_series:
+            if series.name in self.__series:
+                self.__series[series.name].setData(t, series.data)
             else:
-                self.__x.setData(t, d.x.data)
-                self.__y.setData(t, d.y.data)
-                self.__z.setData(t, d.z.data)
+                self.__series[series.name] = self.__chart.plot(t, series.data, pen=pg.mkPen(colour, width=1))

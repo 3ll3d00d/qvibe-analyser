@@ -929,6 +929,38 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>visibleCurves</sender>
+   <signal>itemSelectionChanged()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>set_visible_curves()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>51</x>
+     <y>330</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>32</x>
+     <y>383</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>activeRecorders</sender>
+   <signal>itemSelectionChanged()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>set_visible_recorders()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>142</x>
+     <y>209</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>136</x>
+     <y>391</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>add_new_recorder()</slot>
@@ -941,5 +973,7 @@
   <slot>set_buffer_size()</slot>
   <slot>set_visible_chart()</slot>
   <slot>reset_recording()</slot>
+  <slot>set_visible_curves()</slot>
+  <slot>set_visible_recorders()</slot>
  </slots>
 </ui>

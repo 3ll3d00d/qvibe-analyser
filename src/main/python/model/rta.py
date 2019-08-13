@@ -10,8 +10,8 @@ logger = logging.getLogger('qvibe.rta')
 
 class RTAEvent(ChartEvent):
 
-    def __init__(self, chart, input, idx, preferences, budget_millis, view, visible):
-        super().__init__(chart, input, idx, preferences, budget_millis)
+    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, view, visible):
+        super().__init__(chart, recorder_name, input, idx, preferences, budget_millis)
         self.__view = view
         self.__visible = visible
 
@@ -33,14 +33,10 @@ class RTA(VisibleChart):
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True)
         self.__frame = 0
         self.__time = -1
-        self.__x = None
-        self.__y = None
-        self.__z = None
-        self.__sum = None
-        self.__cache = None
         self.__update_rate = None
         self.__active_view = None
         self.__chart = chart
+        self.__series = {}
         self.__average_samples = -1
         self.__on_average_change(rta_average_widget.currentText())
         rta_average_widget.currentTextChanged.connect(self.__on_average_change)
@@ -50,9 +46,9 @@ class RTA(VisibleChart):
 
     def __on_rta_view_change(self, view):
         self.__active_view = view
-        if self.__cache is not None:
-            self.__cache.set_view(view)
-            self.do_update(None)
+        for name in self.cached.keys():
+            self.cached[name].set_view(view)
+            self.update_chart(name)
 
     def __on_average_change(self, average):
         self.__average = average
@@ -66,51 +62,39 @@ class RTA(VisibleChart):
         if self.__average is not None:
             self.__on_average_change(self.__average)
 
-    def make_event(self, data, idx):
+    def make_event(self, recorder_name, data, idx):
         if self.__average_samples == -1 or len(data) <= self.__average_samples:
             d = data
         else:
             d = data[-self.__average_samples:]
-        return RTAEvent(self, d, idx, self.preferences, self.budget_millis, self.__active_view, self.visible)
+        return RTAEvent(self, recorder_name, d, idx, self.preferences, self.budget_millis, self.__active_view,
+                        self.visible)
 
     def reset_chart(self):
-        if self.__x is not None:
-            self.__chart.removeItem(self.__x)
-            self.__chart.removeItem(self.__y)
-            self.__chart.removeItem(self.__z)
-            self.__x = None
-            self.__y = None
-            self.__z = None
+        for c in self.__series.values():
+            self.__chart.removeItem(c)
+        self.__series = {}
 
-    def update_chart(self):
-        data = self.cached
+    def update_chart(self, recorder_name):
+        data = self.cached.get(recorder_name, None)
         if data is not None:
             if data.has_data() is False:
                 data.recalc()
             if data.has_data():
-                if self.__x is None:
-                    self.__x = self.__plot_new(data, 'x', 'r')
-                    self.__y = self.__plot_new(data, 'y', 'g')
-                    self.__z = self.__plot_new(data, 'z', 'b')
-                else:
-                    self.__update_existing(self.__x, data, 'x')
-                    self.__update_existing(self.__y, data, 'y')
-                    self.__update_existing(self.__z, data, 'z')
+                self.create_or_update(data, 'x', 'r')
+                self.create_or_update(data, 'y', 'g')
+                self.create_or_update(data, 'z', 'b')
 
-    def __plot_new(self, data, axis, colour):
-        view = self.__get_view(axis, data)
-        return self.__chart.plot(view.x, view.y, pen=pg.mkPen(colour, width=1))
-
-    def __get_view(self, axis, data):
+    def create_or_update(self, data, axis, colour):
         sig = getattr(data, axis)
         view = sig.get_analysis(self.__active_view)
-        import numpy as np
-        logger.debug(f"Tick {data.idx} {np.min(view.y):.4f} - {np.max(view.y):.4f} - {len(view.y)} ")
-        return view
-
-    def __update_existing(self, chart, data, axis):
-        view = self.__get_view(axis, data)
         if view is not None:
-            chart.setData(view.x, view.y)
+            import numpy as np
+            logger.debug(f"Tick {data.idx} {np.min(view.y):.4f} - {np.max(view.y):.4f} - {len(view.y)} ")
+            if sig.name in self.visible_series:
+                if sig.name in self.__series:
+                    self.__series[sig.name].setData(view.x, view.y)
+                else:
+                    self.__series[sig.name] = self.__chart.plot(view.x, view.y, pen=pg.mkPen(colour, width=1))
         else:
             logger.error(f"No {self.__active_view} data available")

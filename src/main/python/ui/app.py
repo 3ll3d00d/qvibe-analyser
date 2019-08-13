@@ -315,6 +315,8 @@ class Ui_MainWindow(object):
         self.addRecorderButton.clicked.connect(MainWindow.add_new_recorder)
         self.chartTabs.currentChanged['int'].connect(MainWindow.set_visible_chart)
         self.resetButton.clicked.connect(MainWindow.reset_recording)
+        self.visibleCurves.itemSelectionChanged.connect(MainWindow.set_visible_curves)
+        self.activeRecorders.itemSelectionChanged.connect(MainWindow.set_visible_recorders)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         MainWindow.setTabOrder(self.targetSampleRate, self.targetBatchSize)
         MainWindow.setTabOrder(self.targetBatchSize, self.targetAccelEnabled)
