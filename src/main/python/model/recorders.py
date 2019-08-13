@@ -228,6 +228,9 @@ class Recorder:
         logger.debug(f"Snap {self.__snap_idx} : {c} in {to_millis(start, end)}ms")
         return b, c, self.__snap_idx
 
+    def reset(self):
+        self.__buffer = self.__make_new_buffer()
+
 
 class RecorderStore(Sequence):
     '''
@@ -279,6 +282,11 @@ class RecorderStore(Sequence):
                 if rec.connected is True:
                     return rec.snap()
         return [None] * 3
+
+    def reset(self):
+        ''' clears all cached data. '''
+        for rec in self:
+            rec.reset()
 
     def __on_recorder_connect_event(self, ip, connected):
         '''

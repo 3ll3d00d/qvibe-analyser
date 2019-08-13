@@ -105,26 +105,6 @@
       </item>
       <item>
        <layout class="QGridLayout" name="extraControlsLayout">
-        <item row="2" column="0">
-         <widget class="QLabel" name="fpsLabel">
-          <property name="text">
-           <string>FPS:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QSpinBox" name="fps">
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>50</number>
-          </property>
-          <property name="value">
-           <number>20</number>
-          </property>
-         </widget>
-        </item>
         <item row="1" column="1">
          <widget class="QSpinBox" name="bufferSize">
           <property name="suffix">
@@ -141,17 +121,23 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="bufferSizeLabel">
+        <item row="4" column="0">
+         <widget class="QLabel" name="label">
           <property name="text">
-           <string>Buffer: </string>
+           <string>Elapsed</string>
           </property>
          </widget>
         </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="resolutionHzLabel">
-          <property name="text">
-           <string>Resolution:</string>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="fps">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>50</number>
+          </property>
+          <property name="value">
+           <number>20</number>
           </property>
          </widget>
         </item>
@@ -169,9 +155,60 @@
           </item>
           <item>
            <property name="text">
-            <string>1 Hz</string>
+            <string>1.0 Hz</string>
            </property>
           </item>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QTimeEdit" name="elapsedTime">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+          <property name="currentSection">
+           <enum>QDateTimeEdit::MinuteSection</enum>
+          </property>
+          <property name="displayFormat">
+           <string>mm:ss.zzz</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="actualFPS">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="maximum">
+           <number>120</number>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="fpsLabel">
+          <property name="text">
+           <string>Target FPS</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="bufferSizeLabel">
+          <property name="text">
+           <string>Buffer</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="actualFPSLabel">
+          <property name="text">
+           <string>Actual FPS</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="resolutionHzLabel">
+          <property name="text">
+           <string>Resolution</string>
+          </property>
          </widget>
         </item>
        </layout>
@@ -193,6 +230,13 @@
           <string>By Time</string>
          </attribute>
          <layout class="QGridLayout" name="gridLayout_3">
+          <item row="1" column="0" colspan="2">
+           <widget class="PlotWidgetWithDateAxis" name="liveVibrationChart">
+            <property name="midLineWidth">
+             <number>0</number>
+            </property>
+           </widget>
+          </item>
           <item row="0" column="0">
            <widget class="QComboBox" name="vibrationAnalysis">
             <item>
@@ -224,13 +268,6 @@
              </size>
             </property>
            </spacer>
-          </item>
-          <item row="1" column="0" colspan="2">
-           <widget class="PlotWidgetWithDateAxis" name="liveVibrationChart">
-            <property name="midLineWidth">
-             <number>0</number>
-            </property>
-           </widget>
           </item>
          </layout>
         </widget>
@@ -323,7 +360,7 @@
      </layout>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="addRecorderLayout" stretch="0,0,0,0,0,0">
+     <layout class="QVBoxLayout" name="addRecorderLayout" stretch="0,0,0,0,0,0,0">
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -565,6 +602,13 @@
         </property>
        </spacer>
       </item>
+      <item>
+       <widget class="QPushButton" name="resetButton">
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </item>
    </layout>
@@ -649,6 +693,32 @@
    <header>qvibe</header>
   </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>targetSampleRate</tabstop>
+  <tabstop>targetBatchSize</tabstop>
+  <tabstop>targetAccelEnabled</tabstop>
+  <tabstop>targetAccelSens</tabstop>
+  <tabstop>targetGyroEnabled</tabstop>
+  <tabstop>targetGyroSens</tabstop>
+  <tabstop>applyTargetButton</tabstop>
+  <tabstop>resetTargetButton</tabstop>
+  <tabstop>addRecorderButton</tabstop>
+  <tabstop>saveRecordersButton</tabstop>
+  <tabstop>resetButton</tabstop>
+  <tabstop>resolutionHz</tabstop>
+  <tabstop>bufferSize</tabstop>
+  <tabstop>fps</tabstop>
+  <tabstop>actualFPS</tabstop>
+  <tabstop>elapsedTime</tabstop>
+  <tabstop>activeRecorders</tabstop>
+  <tabstop>visibleCurves</tabstop>
+  <tabstop>chartTabs</tabstop>
+  <tabstop>rtaAverage</tabstop>
+  <tabstop>rtaChart</tabstop>
+  <tabstop>vibrationAnalysis</tabstop>
+  <tabstop>liveVibrationChart</tabstop>
+  <tabstop>rtaView</tabstop>
+ </tabstops>
  <resources/>
  <connections>
   <connection>
@@ -802,8 +872,8 @@
    <slot>set_buffer_size()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>146</x>
-     <y>609</y>
+     <x>174</x>
+     <y>519</y>
     </hint>
     <hint type="destinationlabel">
      <x>760</x>
@@ -818,8 +888,8 @@
    <slot>add_new_recorder()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>790</x>
-     <y>355</y>
+     <x>887</x>
+     <y>353</y>
     </hint>
     <hint type="destinationlabel">
      <x>778</x>
@@ -843,6 +913,22 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>resetButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>reset_recording()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>871</x>
+     <y>627</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>775</x>
+     <y>635</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>add_new_recorder()</slot>
@@ -854,5 +940,6 @@
   <slot>save_recorders()</slot>
   <slot>set_buffer_size()</slot>
   <slot>set_visible_chart()</slot>
+  <slot>reset_recording()</slot>
  </slots>
 </ui>

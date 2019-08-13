@@ -152,11 +152,11 @@ class RollingLogger(logging.Handler):
         self.__preferences.set(LOGGING_LEVEL, self.__levelName)
 
 
-def to_millis(start, end):
+def to_millis(start, end, precision=1):
     '''
     Calculates the differences in time in millis.
     :param start: start time in seconds.
     :param end: end time in seconds.
     :return: delta in millis.
     '''
-    return round((end - start) * 1000)
+    return round((end - start) * 1000, precision)

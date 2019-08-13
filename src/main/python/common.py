@@ -180,6 +180,7 @@ class RingBuffer(Sequence):
 
         self.__left_idx = max(self.__left_idx, self.__right_idx - self.__capacity)
         self.__event_count += len(values)
+        self._fix_indices()
 
     def extend_left(self, values):
         lv = len(values)
@@ -263,5 +264,5 @@ def format_pg_chart(chart, x_lim, y_lim, y_range=None):
         chart.getPlotItem().setYRange(*y_lim, padding=0.0)
     else:
         chart.getPlotItem().setYRange(*y_range, padding=0.0)
-    chart.getPlotItem().setDownsampling(ds=True, auto=True, mode='peak')
+    chart.getPlotItem().setDownsampling(ds=False)
     chart.getPlotItem().layout.setContentsMargins(10, 20, 30, 20)

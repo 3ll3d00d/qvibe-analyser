@@ -10,14 +10,15 @@ logger = logging.getLogger('qvibe.rta')
 
 class RTAEvent(ChartEvent):
 
-    def __init__(self, chart, input, idx, preferences, budget_millis, view):
+    def __init__(self, chart, input, idx, preferences, budget_millis, view, visible):
         super().__init__(chart, input, idx, preferences, budget_millis)
         self.__view = view
+        self.__visible = visible
 
     def process(self):
         super().process()
         self.output.set_view(self.__view, recalc=False)
-        if self.input.shape[0] >= self.chart.min_nperseg:
+        if self.input.shape[0] >= self.chart.min_nperseg and self.__visible:
             self.output.recalc()
             self.should_emit = True
         else:
@@ -26,9 +27,12 @@ class RTAEvent(ChartEvent):
 
 class RTA(VisibleChart):
 
-    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, rta_average_widget, rta_view_widget):
+    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, rta_average_widget,
+                 rta_view_widget):
         self.__average = None
-        super().__init__(prefs, fs_widget, resolution_widget, fps_widget, False, coelesce=True)
+        super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True)
+        self.__frame = 0
+        self.__time = -1
         self.__x = None
         self.__y = None
         self.__z = None
@@ -67,13 +71,19 @@ class RTA(VisibleChart):
             d = data
         else:
             d = data[-self.__average_samples:]
-        return RTAEvent(self, d, idx, self.preferences, self.budget_millis, self.__active_view)
+        return RTAEvent(self, d, idx, self.preferences, self.budget_millis, self.__active_view, self.visible)
 
-    def do_update(self, data):
-        if data is not None:
-            self.__cache = data
-        elif self.__cache is not None:
-            data = self.__cache
+    def reset_chart(self):
+        if self.__x is not None:
+            self.__chart.removeItem(self.__x)
+            self.__chart.removeItem(self.__y)
+            self.__chart.removeItem(self.__z)
+            self.__x = None
+            self.__y = None
+            self.__z = None
+
+    def update_chart(self):
+        data = self.cached
         if data is not None:
             if data.has_data() is False:
                 data.recalc()
@@ -94,6 +104,8 @@ class RTA(VisibleChart):
     def __get_view(self, axis, data):
         sig = getattr(data, axis)
         view = sig.get_analysis(self.__active_view)
+        import numpy as np
+        logger.debug(f"Tick {data.idx} {np.min(view.y):.4f} - {np.max(view.y):.4f} - {len(view.y)} ")
         return view
 
     def __update_existing(self, chart, data, axis):

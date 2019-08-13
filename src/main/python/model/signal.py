@@ -17,16 +17,18 @@ logger = logging.getLogger('qvibe.signal')
 
 class TriAxisSignal:
 
-    def __init__(self, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False, view_mode='avg'):
+    def __init__(self, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
+                 view_mode='avg'):
         self.__has_data = pre_calc
         self.__raw = data
         self.__mode = mode
         self.__view = view_mode
-        self.__x = Signal('x', preferences, data[:, 2], fs, resolution_shift, mode=mode, pre_calc=pre_calc,
+        self.__idx = idx
+        self.__x = Signal('x', preferences, data[:, 2], fs, resolution_shift, idx=idx, mode=mode, pre_calc=pre_calc,
                           view_mode=view_mode)
-        self.__y = Signal('y', preferences, data[:, 3], fs, resolution_shift, mode=mode, pre_calc=pre_calc,
+        self.__y = Signal('y', preferences, data[:, 3], fs, resolution_shift, idx=idx, mode=mode, pre_calc=pre_calc,
                           view_mode=view_mode)
-        self.__z = Signal('z', preferences, data[:, 4], fs, resolution_shift, mode=mode, pre_calc=pre_calc,
+        self.__z = Signal('z', preferences, data[:, 4], fs, resolution_shift, idx=idx, mode=mode, pre_calc=pre_calc,
                           view_mode=view_mode)
 
     def set_view(self, view, recalc=True):
@@ -60,6 +62,10 @@ class TriAxisSignal:
     def z(self):
         return self.__z
 
+    @property
+    def idx(self):
+        return self.__idx
+
     def recalc(self):
         self.__has_data = True
         self.x.recalc()
@@ -83,7 +89,8 @@ class Analysis:
 
 class Signal:
 
-    def __init__(self, name, preferences, data, fs, resolution_shift, mode='vibration', pre_calc=False, view_mode='avg'):
+    def __init__(self, name, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
+                 view_mode='avg'):
         '''
         Creates a new signal.
         :param preferences: common prefs.
@@ -100,6 +107,7 @@ class Signal:
         self.__output = {}
         self.__fs = fs
         self.__view_mode = view_mode
+        self.__idx = idx
         self.__analyse_data(mode)
         self.__resolution_shift = resolution_shift
         if pre_calc is True:
@@ -145,7 +153,7 @@ class Signal:
         start = time.time()
         self.__output[self.__view_mode] = self.__calculate()
         end = time.time()
-        logger.debug(f"Recalc {self.__name} in {to_millis(start, end)}ms")
+        logger.debug(f"Recalc {self.__name}:{self.__idx} in {to_millis(start, end)}ms")
 
     def get_analysis(self, view_name):
         '''

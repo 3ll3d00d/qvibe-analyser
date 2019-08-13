@@ -4,7 +4,7 @@ import math
 import time
 from queue import Queue, Empty
 
-from qtpy.QtCore import QObject, Signal, QThread
+from qtpy.QtCore import QObject, Signal, QThread, QTimer
 
 from model.log import to_millis
 from model.signal import TriAxisSignal, get_segment_length
@@ -97,6 +97,7 @@ class ChartEvent:
                                     self.input,
                                     self.chart.fs,
                                     self.chart.resolution_shift,
+                                    idx=self.idx,
                                     mode=self.__analysis_mode,
                                     pre_calc=False)
 
@@ -111,19 +112,24 @@ class ChartSignals(QObject):
 
 class VisibleChart:
 
-    def __init__(self, prefs, fs_widget, resolution_widget, fps_widget, visible,
-                 coelesce=False, analysis_mode='vibration'):
+    def __init__(self, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, visible, coelesce=False,
+                 analysis_mode='vibration'):
         self.signals = ChartSignals()
         self.processor = ChartProcessor(coelesce=coelesce)
         self.signals.new_data.connect(self.do_update)
+        self.__timer = QTimer()
+        self.__timer.timeout.connect(self.set_actual_fps)
         self.preferences = prefs
         self.__visible = visible
         self.__analysis_mode = analysis_mode
         self.__resolution_shift = None
         self.__fs = None
         self.__fps = None
+        self.__actual_fps_widget = actual_fps_widget
         self.__budget_millis = None
         self.__min_nperseg = 0
+        self.__ticks = 0
+        self.__cached = None
         self.__received_data_with_invisible = False
         self.__on_resolution_change(resolution_widget.currentText())
         self.__on_fs_change(fs_widget.value())
@@ -132,6 +138,11 @@ class VisibleChart:
         resolution_widget.currentTextChanged.connect(self.__on_resolution_change)
         self.__on_fps_change(fps_widget.value())
         fps_widget.valueChanged['int'].connect(self.__on_fps_change)
+
+    def set_actual_fps(self):
+        ''' pushes the tick count to the actual fps widget. '''
+        self.__actual_fps_widget.setValue(self.__ticks)
+        self.__ticks = 0
 
     @property
     def fps(self):
@@ -179,15 +190,56 @@ class VisibleChart:
     def visible(self, visible):
         if visible is True and self.__visible is False and self.__received_data_with_invisible is True:
             # if we have received data since we were last visible, update the charts
-            self.do_update(None)
+            self.update_chart()
         self.__visible = visible
+        if self.__visible is True:
+            self.__timer.start(1000)
+        else:
+            self.__timer.stop()
 
-    @abc.abstractmethod
+    @property
+    def cached(self):
+        return self.__cached
+
     def do_update(self, data):
         '''
         Update the chart.
         :param data: the data to update the chart with.
         '''
+        to_update = self.accept_data(data)
+        if to_update is not None:
+            if self.visible is True:
+                start = time.time()
+                self.update_chart()
+                end = time.time()
+                self.__ticks += 1
+                logger.debug(f"Updated {self.__class__.__name__} {to_update.idx} in {to_millis(start, end)} ms")
+            else:
+                self.__received_data_with_invisible = True
+
+    def accept_data(self, data):
+        '''
+        Accepts the fresh data into the cache for the chart.
+        :param data: the data.
+        '''
+        self.__cached = data
+        return self.__cached
+
+    @abc.abstractmethod
+    def update_chart(self):
+        '''
+        Update the chart with the cached data if necessary.
+        '''
+        pass
+
+    def reset(self):
+        self.__cached = None
+        self.__ticks = 0
+        self.reset_chart()
+
+    @abc.abstractmethod
+    def reset_chart(self):
+        ''' Wipes data from the chart. '''
         pass
 
     def __cache_nperseg(self):

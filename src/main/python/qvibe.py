@@ -3,6 +3,8 @@ import os
 import sys
 
 # matplotlib.use("Qt5Agg")
+import time
+
 from model.rta import RTA
 from model.vibration import Vibration
 
@@ -17,7 +19,7 @@ import pyqtgraph as pg
 import qtawesome as qta
 
 from qtpy import QtCore
-from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QRunnable
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QRunnable, QTime
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
 from common import block_signals, ReactorRunner
@@ -87,6 +89,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.app.aboutToQuit.connect(runner.stop)
         # core domain stores
         self.__timer = None
+        self.__start_time = None
         self.__target_config = self.__load_config()
         self.__display_target_config()
         self.__recorder_store = RecorderStore(self.__target_config,
@@ -109,16 +112,22 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.bufferSize.setValue(self.preferences.get(BUFFER_SIZE))
         # charts
         self.__analysers = {
-            0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.resolutionHz,
-                         self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
-            1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps,
+            0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
+                         self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
+            1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView)
         }
         self.__start_analysers()
+        self.set_visible_chart(self.chartTabs.currentIndex())
 
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
         self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
+
+    def reset_recording(self):
+        self.__recorder_store.reset()
+        for c in self.__analysers.values():
+            c.reset()
 
     def __start_analysers(self):
         for a in self.__analysers.values():
@@ -145,11 +154,11 @@ class QVibe(QMainWindow, Ui_MainWindow):
             for i in self.activeRecorders.findItems(ip, Qt.MatchExactly):
                 i.setSelected(True)
         if any_connected is True:
-            self.__start_timer()
+            self.__on_start_recording()
         else:
-            self.__stop_timer()
+            self.__on_stop_recording()
 
-    def __start_timer(self):
+    def __on_start_recording(self):
         '''
         Starts the data collection timer.
         '''
@@ -157,15 +166,21 @@ class QVibe(QMainWindow, Ui_MainWindow):
             self.__timer = QTimer()
             self.__timer.timeout.connect(self.__collect_signals)
         logger.info(f"Starting data collection timer at {self.fps.value()} fps")
+        self.__start_time = time.time() * 1000
         self.__timer.start(1000.0 / self.fps.value())
+        self.resetButton.setEnabled(False)
 
-    def __stop_timer(self):
+    def __on_stop_recording(self):
         if self.__timer is not None:
             logger.info('Stopping data collection timer')
             self.__timer.stop()
+            self.resetButton.setEnabled(True)
 
     def __collect_signals(self):
         ''' collects the latest signal and pushes it into the analysers. '''
+        elapsed = round((time.time() * 1000) - self.__start_time)
+        new_time = QTime(0, 0, 0, 0).addMSecs(elapsed)
+        self.elapsedTime.setTime(new_time)
         signal, count, idx = self.__recorder_store.snap()
         if signal is not None:
             if count > 0:
@@ -236,7 +251,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
 
     def set_visible_chart(self, idx):
         for c_idx, c in self.__analysers.items():
-            c.visible = idx == c_idx
+            c.visible = (idx == c_idx)
 
     def show_release_notes(self):
         ''' Shows the release notes '''

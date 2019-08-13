@@ -11,9 +11,9 @@ logger = logging.getLogger('qvibe.vibration')
 
 class Vibration(VisibleChart):
 
-    def __init__(self, chart, prefs, fs_widget, fps_widget, resolution_widget, accel_sens_widget, buffer_size_widget,
-                 analysis_type_widget):
-        super().__init__(prefs, fs_widget, resolution_widget, fps_widget,
+    def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, accel_sens_widget,
+                 buffer_size_widget, analysis_type_widget):
+        super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          True, analysis_mode=analysis_type_widget.currentText())
         self.__x = None
         self.__y = None
@@ -47,21 +47,27 @@ class Vibration(VisibleChart):
         if self.__buffer_size is not None and self.__sens is not None:
             format_pg_chart(self.__chart, (0, self.__buffer_size), (-self.__sens, self.__sens))
 
-    def do_update(self, data):
+    def reset_chart(self):
+        if self.__x is not None:
+            self.__chart.removeItem(self.__x)
+            self.__chart.removeItem(self.__y)
+            self.__chart.removeItem(self.__z)
+            self.__x = None
+            self.__y = None
+            self.__z = None
+
+    def update_chart(self):
         '''
         updates the chart with the latest signal.
         '''
-        if data is None and self.__cached is not None:
-            d = self.__cached
-        else:
-            d = data
-            self.__cached = d
-        t = (d.time - np.min(d.time))/500
-        if self.__x is None:
-            self.__x = self.__chart.plot(t, d.x.data, pen=pg.mkPen('r', width=1))
-            self.__y = self.__chart.plot(t, d.y.data, pen=pg.mkPen('g', width=1))
-            self.__z = self.__chart.plot(t, d.z.data, pen=pg.mkPen('b', width=1))
-        else:
-            self.__x.setData(t, d.x.data)
-            self.__y.setData(t, d.y.data)
-            self.__z.setData(t, d.z.data)
+        if self.cached is not None:
+            d = self.cached
+            t = (d.time - np.min(d.time))/500
+            if self.__x is None:
+                self.__x = self.__chart.plot(t, d.x.data, pen=pg.mkPen('r', width=1))
+                self.__y = self.__chart.plot(t, d.y.data, pen=pg.mkPen('g', width=1))
+                self.__z = self.__chart.plot(t, d.z.data, pen=pg.mkPen('b', width=1))
+            else:
+                self.__x.setData(t, d.x.data)
+                self.__y.setData(t, d.y.data)
+                self.__z.setData(t, d.z.data)

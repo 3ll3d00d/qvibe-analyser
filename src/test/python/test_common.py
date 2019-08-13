@@ -76,11 +76,22 @@ def test_append_left():
     assert len(r) == 5
 
 
+def test_unwrap():
+    r = RingBuffer(5, dtype=np.int64)
+    r.extend([1, 2, 3])
+    r.extend([4, 5, 6])
+    r.extend([7, 8, 9])
+    r.extend([10, 11, 12])
+    r.extend([13, 14, 15])
+    r.extend([16, 17, 18])
+    e = r.unwrap()
+    np.testing.assert_equal(e, np.array([14, 15, 16, 17, 18]))
+
+
 def test_extend():
     r = RingBuffer(5)
     r.extend([1, 2, 3])
     np.testing.assert_equal(r, np.array([1, 2, 3]))
-    r.pop_left()
     r.extend([4, 5, 6])
     np.testing.assert_equal(r, np.array([2, 3, 4, 5, 6]))
     r.extend_left([0, 1])
@@ -91,27 +102,6 @@ def test_extend():
 
     r.extend([1, 2, 3, 4, 5, 6, 7])
     np.testing.assert_equal(r, np.array([3, 4, 5, 6, 7]))
-
-
-def test_pops():
-    r = RingBuffer(3)
-    r.append(1)
-    r.append_left(2)
-    r.append(3)
-    np.testing.assert_equal(r, np.array([2, 1, 3]))
-
-    assert r.pop() == 3
-    np.testing.assert_equal(r, np.array([2, 1]))
-
-    assert r.pop_left() == 2
-    np.testing.assert_equal(r, np.array([1]))
-
-    # test empty pops
-    empty = RingBuffer(1)
-    # with self.assertRaisesRegex(IndexError, "pop from an empty RingBuffer"):
-    #     empty.pop()
-    # with self.assertRaisesRegex(IndexError, "pop from an empty RingBuffer"):
-    #     empty.pop_left()
 
 
 def test_2d():

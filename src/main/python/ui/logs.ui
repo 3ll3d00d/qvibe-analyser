@@ -112,6 +112,12 @@
    </layout>
   </widget>
  </widget>
+ <tabstops>
+  <tabstop>maxRows</tabstop>
+  <tabstop>logLevel</tabstop>
+  <tabstop>excludes</tabstop>
+  <tabstop>logViewer</tabstop>
+ </tabstops>
  <resources/>
  <connections>
   <connection>
