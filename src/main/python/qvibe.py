@@ -65,17 +65,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                                               self.__alert_on_old_version,
                                                               self.__alert_on_version_check_fail,
                                                               self.__version))
-
-        # matplotlib_theme = self.preferences.get(STYLE_MATPLOTLIB_THEME)
-        # if matplotlib_theme is not None:
-        #     if matplotlib_theme.startswith('beq'):
-        #         style.use(os.path.join(self.__style_path_root, 'style', 'mpl', f"{matplotlib_theme}.mplstyle"))
-        #     else:
-        #         style.use(matplotlib_theme)
-
-        # pg.setConfigOption('background', matplotlib.colors.to_hex(matplotlib.rcParams['axes.facecolor']))
-        # pg.setConfigOption('foreground', matplotlib.colors.to_hex(matplotlib.rcParams['axes.edgecolor']))
-        # pg.setConfigOption('leftButtonPan', False)
         # UI initialisation
         self.setupUi(self)
         self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))

@@ -66,3 +66,5 @@ class Vibration(VisibleChart):
                 self.__series[series.name].setData(t, series.data)
             else:
                 self.__series[series.name] = self.__chart.plot(t, series.data, pen=pg.mkPen(colour, width=1))
+        elif series.name in self.__series:
+            self.__chart.removeItem(self.__series[series.name])

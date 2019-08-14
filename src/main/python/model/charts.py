@@ -151,8 +151,8 @@ class VisibleChart:
     def set_visible_series(self, series):
         ''' changes the visible series. '''
         self.__visible_series = series
-        # TODO update the charts
-        # self.update_chart()
+        for k in self.cached.keys():
+            self.update_chart(k)
 
     def set_actual_fps(self):
         ''' pushes the tick count to the actual fps widget. '''

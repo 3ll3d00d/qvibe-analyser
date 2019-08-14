@@ -107,3 +107,6 @@ class RTA(VisibleChart):
                     self.__series[sig.name].setData(view.x, view.y)
                 else:
                     self.__series[sig.name] = self.__chart.plot(view.x, view.y, pen=pg.mkPen(colour, width=1))
+            elif sig.name in self.__series:
+                self.__chart.removeItem(self.__series[sig.name])
+                del self.__series[sig.name]
