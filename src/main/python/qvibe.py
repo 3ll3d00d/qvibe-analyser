@@ -82,6 +82,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.__target_config = self.__load_config()
         self.__display_target_config()
         self.__recorder_store = RecorderStore(self.__target_config,
+                                              self.bufferSize,
                                               self.recordersLayout,
                                               self.centralwidget,
                                               self.__reactor)
@@ -237,8 +238,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
 
     def set_buffer_size(self, val):
         self.preferences.set(BUFFER_SIZE, val)
-        # TODO propagate to the recorders
-        # self.__signal_store.length = val
 
     def set_visible_chart(self, idx):
         for c_idx, c in self.__analysers.items():

@@ -310,7 +310,7 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menu_Help.menuAction())
 
         self.retranslateUi(MainWindow)
-        self.chartTabs.setCurrentIndex(1)
+        self.chartTabs.setCurrentIndex(0)
         self.resetTargetButton.clicked.connect(MainWindow.reset_target)
         self.applyTargetButton.clicked.connect(MainWindow.apply_target)
         self.targetSampleRate.valueChanged['int'].connect(MainWindow.update_target)

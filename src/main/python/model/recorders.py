@@ -22,15 +22,14 @@ class RecorderSignals(QObject):
 
 class Recorder:
 
-    def __init__(self, idx, parent_layout, parent, target_config, reactor):
+    def __init__(self, idx, buffer_size, parent_layout, parent, target_config, reactor):
         ''' Adds widgets to the main screen to display another recorder. '''
         self.__target_config = target_config
         self.signals = RecorderSignals()
         self.__name = None
         self.__reactor = reactor
         self.__listener = None
-        # TODO get buffer size
-        self.__buffer_size = 30
+        self.__buffer_size = buffer_size
         self.__snap_idx = 0
         self.__buffer = self.__make_new_buffer()
         # init the widgets on screen which control it
@@ -107,9 +106,9 @@ class Recorder:
         :param buffer_size: the new size (in seconds).
         '''
         self.__buffer_size = buffer_size
-        dat, _ = self.__buffer.unwrap()
+        dat = self.__buffer.unwrap()
         new_buf = self.__make_new_buffer()
-        new_buf.append(dat)
+        new_buf.extend(dat)
         self.__buffer = new_buf
 
     @property
@@ -236,13 +235,21 @@ class RecorderStore(Sequence):
     '''
     Stores all recorders known to the system.
     '''
-    def __init__(self, target_config, parent_layout, parent, reactor):
+    def __init__(self, target_config, buffer_size_widget, parent_layout, parent, reactor):
         self.signals = RecorderSignals()
         self.__parent_layout = parent_layout
         self.__parent = parent
         self.__recorders = []
         self.__target_config = target_config
+        self.__buffer_size = 30
         self.__reactor = reactor
+        buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
+        self.__on_buffer_size_change(buffer_size_widget.value())
+
+    def __on_buffer_size_change(self, size):
+        self.__buffer_size = size
+        for r in self.__recorders:
+            r.reset_buffer_size(size)
 
     @property
     def target_config(self):
@@ -256,7 +263,8 @@ class RecorderStore(Sequence):
 
     def append(self):
         ''' adds a new recorder. '''
-        rec = Recorder(len(self.__recorders), self.__parent_layout, self.__parent, self.__target_config, self.__reactor)
+        rec = Recorder(len(self.__recorders), self.__buffer_size, self.__parent_layout, self.__parent,
+                       self.__target_config, self.__reactor)
         rec.signals.on_status_change.connect(self.__on_recorder_connect_event)
         self.__recorders.append(rec)
         return rec

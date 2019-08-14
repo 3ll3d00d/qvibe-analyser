@@ -156,7 +156,9 @@ class VisibleChart:
 
     def set_actual_fps(self):
         ''' pushes the tick count to the actual fps widget. '''
-        self.__actual_fps_widget.setValue(self.__ticks)
+        active = len(self.cached.keys())
+        val = int(self.__ticks / len(self.cached.keys())) if active > 0 else 0
+        self.__actual_fps_widget.setValue(val)
         self.__ticks = 0
 
     @property
