@@ -68,7 +68,8 @@ class ChartProcessor(QThread):
 
 class ChartEvent:
     ''' Allows preprocessing of fresh data for a chart to occur away from the main thread. '''
-    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, analysis_mode='vibration'):
+    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, analysis_mode='vibration',
+                 smooth=False):
         super().__init__()
         self.chart = chart
         self.recorder_name = recorder_name
@@ -77,6 +78,7 @@ class ChartEvent:
         self.preferences = preferences
         self.__analysis_mode = analysis_mode
         self.__budget_millis = budget_millis * 0.9
+        self.__smooth = smooth
         self.should_emit = False
         self.output = None
 
@@ -102,6 +104,7 @@ class ChartEvent:
                                     self.input,
                                     self.chart.fs,
                                     self.chart.resolution_shift,
+                                    self.__smooth,
                                     idx=self.idx,
                                     mode=self.__analysis_mode,
                                     pre_calc=False)
@@ -135,7 +138,7 @@ class VisibleChart:
         self.__min_nperseg = 0
         self.__ticks = 0
         self.__cached = {}
-        self.__received_data_with_invisible = False
+        self.__received_data_while_invisible = set()
         self.__visible_series = []
         self.__on_resolution_change(resolution_widget.currentText())
         self.__on_fs_change(fs_widget.value())
@@ -204,9 +207,10 @@ class VisibleChart:
 
     @visible.setter
     def visible(self, visible):
-        if visible is True and self.__visible is False and self.__received_data_with_invisible is True:
+        if visible is True and self.__visible is False:
             # if we have received data since we were last visible, update the charts
-            self.update_chart()
+            for r in self.__received_data_while_invisible:
+                self.update_chart(r)
         self.__visible = visible
         if self.__visible is True:
             self.__timer.start(1000)
@@ -231,7 +235,7 @@ class VisibleChart:
                 self.__ticks += 1
                 logger.debug(f"Updated {self.__class__.__name__} {to_update.idx} in {to_millis(start, end)} ms")
             else:
-                self.__received_data_with_invisible = True
+                self.__received_data_while_invisible.add(data.recorder_name)
 
     def accept_data(self, data):
         '''

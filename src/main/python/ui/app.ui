@@ -223,7 +223,7 @@
       <item row="0" column="0">
        <widget class="QTabWidget" name="chartTabs">
         <property name="currentIndex">
-         <number>0</number>
+         <number>1</number>
         </property>
         <widget class="QWidget" name="vibrationTab">
          <attribute name="title">
@@ -336,6 +336,13 @@
                 <string>psd</string>
                </property>
               </item>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="smoothRta">
+              <property name="text">
+               <string>Smooth?</string>
+              </property>
              </widget>
             </item>
             <item>
@@ -635,6 +642,13 @@
     <addaction name="actionShow_Logs"/>
     <addaction name="actionRelease_Notes"/>
    </widget>
+   <widget class="QMenu" name="menu_File">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="actionSave_Chart"/>
+   </widget>
+   <addaction name="menu_File"/>
    <addaction name="menuSettings"/>
    <addaction name="menu_Help"/>
   </widget>
@@ -678,6 +692,14 @@
   <action name="actionRelease_Notes">
    <property name="text">
     <string>Release &amp;Notes</string>
+   </property>
+  </action>
+  <action name="actionSave_Chart">
+   <property name="text">
+    <string>Save &amp;Chart</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
    </property>
   </action>
  </widget>

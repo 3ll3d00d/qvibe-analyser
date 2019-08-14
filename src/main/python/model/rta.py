@@ -2,6 +2,8 @@ import logging
 
 import pyqtgraph as pg
 
+from qtpy.QtCore import Qt
+
 from common import format_pg_chart
 from model.charts import VisibleChart, ChartEvent
 
@@ -10,8 +12,8 @@ logger = logging.getLogger('qvibe.rta')
 
 class RTAEvent(ChartEvent):
 
-    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, view, visible):
-        super().__init__(chart, recorder_name, input, idx, preferences, budget_millis)
+    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, view, visible, smooth):
+        super().__init__(chart, recorder_name, input, idx, preferences, budget_millis, smooth=smooth)
         self.__view = view
         self.__visible = visible
 
@@ -28,13 +30,14 @@ class RTAEvent(ChartEvent):
 class RTA(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, rta_average_widget,
-                 rta_view_widget):
+                 rta_view_widget, smooth_rta_widget):
         self.__average = None
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True)
         self.__frame = 0
         self.__time = -1
         self.__update_rate = None
         self.__active_view = None
+        self.__smooth = False
         self.__chart = chart
         self.__series = {}
         self.__average_samples = -1
@@ -42,7 +45,14 @@ class RTA(VisibleChart):
         rta_average_widget.currentTextChanged.connect(self.__on_average_change)
         self.__on_rta_view_change(rta_view_widget.currentText())
         rta_view_widget.currentTextChanged.connect(self.__on_rta_view_change)
+        self.__on_rta_smooth_change(Qt.Checked if smooth_rta_widget.isChecked() else Qt.Unchecked)
+        smooth_rta_widget.stateChanged.connect(self.__on_rta_smooth_change)
         format_pg_chart(self.__chart, (0, self.fs / 2), (0, 150), (40, 120))
+
+    def __on_rta_smooth_change(self, state):
+        self.__smooth = state == Qt.Checked
+        for n, d in self.cached.items():
+            d.set_smooth(self.__smooth)
 
     def __on_rta_view_change(self, view):
         self.__active_view = view
@@ -68,7 +78,7 @@ class RTA(VisibleChart):
         else:
             d = data[-self.__average_samples:]
         return RTAEvent(self, recorder_name, d, idx, self.preferences, self.budget_millis, self.__active_view,
-                        self.visible)
+                        self.visible, self.__smooth)
 
     def reset_chart(self):
         for c in self.__series.values():
@@ -84,6 +94,7 @@ class RTA(VisibleChart):
                 self.create_or_update(data, 'x', 'r')
                 self.create_or_update(data, 'y', 'g')
                 self.create_or_update(data, 'z', 'b')
+                self.create_or_update(data, 'sum', 'm')
 
     def create_or_update(self, data, axis, colour):
         sig = getattr(data, axis)
@@ -96,5 +107,3 @@ class RTA(VisibleChart):
                     self.__series[sig.name].setData(view.x, view.y)
                 else:
                     self.__series[sig.name] = self.__chart.plot(view.x, view.y, pen=pg.mkPen(colour, width=1))
-        else:
-            logger.error(f"No {self.__active_view} data available")

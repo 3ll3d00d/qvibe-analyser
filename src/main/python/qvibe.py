@@ -6,6 +6,7 @@ import sys
 import time
 
 from model.rta import RTA
+from model.save import SaveChartDialog
 from model.vibration import Vibration
 
 os.environ['QT_API'] = 'pyqt5'
@@ -107,6 +108,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.log_viewer = RollingLogger(self.preferences, parent=self)
         self.actionShow_Logs.triggered.connect(self.log_viewer.show_logs)
         self.action_Preferences.triggered.connect(self.show_preferences)
+        self.actionSave_Chart.triggered.connect(self.export_chart)
         # buffer
         self.bufferSize.setValue(self.preferences.get(BUFFER_SIZE))
         # charts
@@ -114,7 +116,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
-                   self.rtaAverage, self.rtaView)
+                   self.rtaAverage, self.rtaView, self.smoothRta)
         }
         self.__start_analysers()
         self.set_visible_chart(self.chartTabs.currentIndex())
@@ -264,6 +266,17 @@ class QVibe(QMainWindow, Ui_MainWindow):
         logger.info(f"Setting visible series [{series}]")
         for c in self.__analysers.values():
             c.set_visible_series(series)
+
+    def export_chart(self):
+        '''
+        Saves the currently selected chart to a file.
+        '''
+        idx = self.chartTabs.currentIndex()
+        dialog = SaveChartDialog(self,
+                                 self.__analysers[idx].__class__.__name__,
+                                 self.liveVibrationChart if idx == 0 else self.rtaChart,
+                                 self.statusbar)
+        dialog.exec()
 
     def show_release_notes(self):
         ''' Shows the release notes '''
