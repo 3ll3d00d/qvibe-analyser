@@ -1,16 +1,14 @@
 import logging
 import os
 import sys
-
-# matplotlib.use("Qt5Agg")
 import time
 
 from model.rta import RTA
 from model.save import SaveChartDialog
+from model.spectrogram import Spectrogram
 from model.vibration import Vibration
 
 os.environ['QT_API'] = 'pyqt5'
-# os.environ['PYQTGRAPH_QT_LIB'] = 'PyQt5'
 if sys.platform == 'win32' and getattr(sys, '_MEIPASS', False):
     # Workaround for PyInstaller being unable to find Qt5Core.dll on PATH.
     # See https://github.com/pyinstaller/pyinstaller/issues/4293
@@ -20,7 +18,7 @@ import pyqtgraph as pg
 import qtawesome as qta
 
 from qtpy import QtCore
-from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QRunnable, QTime
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QTime
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
 from common import block_signals, ReactorRunner
@@ -35,7 +33,6 @@ from ui.app import Ui_MainWindow
 from model.recorders import RecorderStore, RecorderConfig
 
 logger = logging.getLogger('qvibe')
-# logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 class QVibe(QMainWindow, Ui_MainWindow):
@@ -106,7 +103,9 @@ class QVibe(QMainWindow, Ui_MainWindow):
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
-                   self.rtaAverage, self.rtaView, self.smoothRta)
+                   self.rtaAverage, self.rtaView, self.smoothRta),
+            2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
+                           self.resolutionHz, self.bufferSize),
         }
         self.__start_analysers()
         self.set_visible_chart(self.chartTabs.currentIndex())
@@ -260,11 +259,16 @@ class QVibe(QMainWindow, Ui_MainWindow):
         Saves the currently selected chart to a file.
         '''
         idx = self.chartTabs.currentIndex()
-        dialog = SaveChartDialog(self,
-                                 self.__analysers[idx].__class__.__name__,
-                                 self.liveVibrationChart if idx == 0 else self.rtaChart,
-                                 self.statusbar)
-        dialog.exec()
+        chart = None
+        if idx == 0:
+            chart = self.liveVibrationChart
+        elif idx == 1:
+            chart = self.rtaChart
+        elif idx == 2:
+            chart = self.spectrogramView
+        if chart is not None:
+            dialog = SaveChartDialog(self, self.__analysers[idx].__class__.__name__, chart, self.statusbar)
+            dialog.exec()
 
     def show_release_notes(self):
         ''' Shows the release notes '''
@@ -342,12 +346,7 @@ def make_app():
         icon_path = os.path.abspath(os.path.join(os.path.dirname('__file__'), '../icons/Icon.ico'))
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
-    prefs = Preferences(QSettings("3ll3d00d", "qvibe-analyser"))
-    # if prefs.get(STYLE_MATPLOTLIB_THEME) == f"{STYLE_MATPLOTLIB_THEME_DEFAULT}_extra":
-    #     import qdarkstyle
-    #     style = qdarkstyle.load_stylesheet_from_environment()
-    #     app.setStyleSheet(style)
-    return app, prefs
+    return app, Preferences(QSettings("3ll3d00d", "qvibe-analyser"))
 
 
 if __name__ == '__main__':
@@ -395,6 +394,22 @@ class PlotWidgetWithDateAxis(pg.PlotWidget):
                          background=background,
                          axisItems={'bottom': TimeAxisItem(orientation='bottom')},
                          **kargs)
+
+
+class PlotWidgetForSpectrogram(pg.PlotWidget):
+    def __init__(self, parent=None, background='default', **kargs):
+        super().__init__(parent=parent,
+                         background=background,
+                         axisItems={'left': Inverse(orientation='left')},
+                         **kargs)
+
+
+class Inverse(pg.AxisItem):
+    def __init__(self, *args, **kwargs):
+        super(Inverse, self).__init__(*args, **kwargs)
+
+    def tickStrings(self, values, scale, spacing):
+        return values[::-1]
 
 
 class TimeAxisItem(pg.AxisItem):

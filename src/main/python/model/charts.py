@@ -111,11 +111,11 @@ class ChartEvent:
 
     def handle_data(self):
         if self.should_emit is True:
-            self.chart.signals.new_data.emit(self.output)
+            self.chart.signals.new_data.emit(self.recorder_name, self.idx, self.output)
 
 
 class ChartSignals(QObject):
-    new_data = Signal(object)
+    new_data = Signal(str, int, object)
 
 
 class VisibleChart:
@@ -223,21 +223,22 @@ class VisibleChart:
     def cached(self):
         return self.__cached
 
-    def do_update(self, data):
+    def do_update(self, recorder_name, idx, data):
         '''
         Update the chart.
+        :param recorder_name: the recorder that produced this data.
         :param data: the data to update the chart with.
         '''
         to_update = self.accept_data(data)
         if to_update is not None:
             if self.visible is True:
                 start = time.time()
-                self.update_chart(data.recorder_name)
+                self.update_chart(recorder_name)
                 end = time.time()
                 self.__ticks += 1
-                logger.debug(f"Updated {self.__class__.__name__} {to_update.idx} in {to_millis(start, end)} ms")
+                logger.debug(f"Updated {self.__class__.__name__} {idx} in {to_millis(start, end)} ms")
             else:
-                self.__received_data_while_invisible.add(data.recorder_name)
+                self.__received_data_while_invisible.add(recorder_name)
 
     def accept_data(self, data):
         '''
@@ -276,6 +277,11 @@ class VisibleChart:
     def __on_fs_change(self, fs):
         self.__fs = fs
         self.__cache_nperseg()
+        self.on_fs_change()
+
+    def on_fs_change(self):
+        ''' allows subclasses to react to fs change '''
+        pass
 
     def __on_resolution_change(self, resolution):
         self.__resolution_shift = int(math.log(float(resolution[0:-3]), 2))
@@ -288,7 +294,9 @@ class VisibleChart:
         :param data: the data.
         :param idx: the index.
         '''
-        self.processor.queue.put(self.make_event(recorder_name, data, idx), block=False)
+        event = self.make_event(recorder_name, data, idx)
+        if event is not None:
+            self.processor.queue.put(event, block=False)
 
     def make_event(self, recorder_name, data, idx):
         '''

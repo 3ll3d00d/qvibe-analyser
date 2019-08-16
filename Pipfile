@@ -14,7 +14,6 @@ qtawesome = ">=0.5.7"
 requests = "*"
 markdown = "*"
 semver = "*"
-matplotlib = "*"
 twisted = "*"
 
 [dev-packages]

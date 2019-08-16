@@ -158,6 +158,16 @@
             <string>1.0 Hz</string>
            </property>
           </item>
+          <item>
+           <property name="text">
+            <string>2.0 Hz</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>4.0 Hz</string>
+           </property>
+          </item>
          </widget>
         </item>
         <item row="4" column="1">
@@ -359,6 +369,16 @@
              </spacer>
             </item>
            </layout>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="spectrogramTab">
+         <attribute name="title">
+          <string>Spectrogram</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout">
+          <item row="0" column="0">
+           <widget class="PlotWidgetForSpectrum" name="spectrogramView"/>
           </item>
          </layout>
         </widget>

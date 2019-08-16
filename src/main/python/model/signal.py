@@ -97,6 +97,14 @@ class TriAxisSignal:
         self.sum.recalc()
 
 
+class SpectroValues:
+
+    def __init__(self, f, t, Sxx):
+        self.f = f
+        self.t = t
+        self.sxx = Sxx
+
+
 class Analysis:
     def __init__(self, values, smooth=False):
         self.__x = values[0]
@@ -161,11 +169,13 @@ class AnalysableSignal:
         if recalc is True:
             self.recalc()
 
-    def get_analysis(self, view_name):
+    def get_analysis(self, view_name=None):
         '''
         :param view_name: the named analysis view.
         :return: the analysis if any.
         '''
+        if view_name is None:
+            view_name = self.__view_mode
         if view_name in self.__output:
             return self.__output[view_name]
         return None
@@ -294,6 +304,8 @@ class Signal(AnalysableSignal):
             avg_wnd = get_window(self.prefs, ANALYSIS_AVG_WINDOW)
             return Analysis(self.__psd(resolution_shift=self.__resolution_shift, window=avg_wnd),
                             smooth=self.smooth)
+        elif self.view_mode == 'spectrogram':
+            return SpectroValues(*self.__spectrogram(resolution_shift=self.__resolution_shift))
 
     def __psd(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None, **kwargs):
         """
@@ -359,6 +371,29 @@ class Signal(AnalysableSignal):
         # a 3dB adjustment is required to account for the change in nperseg
         Pxy_max_db = amplitude_to_db(Pxy_max, ref=ADJUST_BY_3DB * ref)
         return freqs, Pxy_max, Pxy_max_db
+
+    def __spectrogram(self, ref=REF_ACCELERATION_IN_G, resolution_shift=0, window=None):
+        """
+        analyses the source to generate a spectrogram
+        :param resolution_shift: allows resolution to go down (if positive) or up (if negative).
+        :return:
+            f : ndarray
+            Array of time slices.
+            t : ndarray
+            Array of sample frequencies.
+            Pxx : ndarray
+            linear spectrum values.
+        """
+        nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
+        f, t, Sxx = signal.spectrogram(self.__data,
+                                       self.fs,
+                                       window=window if window else ('tukey', 0.25),
+                                       nperseg=nperseg,
+                                       noverlap=int(nperseg // 2),
+                                       detrend=False,
+                                       scaling='spectrum')
+        Sxx = amplitude_to_db(np.sqrt(Sxx), ref=ref * ADJUST_BY_3DB)
+        return f, t, Sxx
 
 
 def butter(fs, data, btype, f3=2, order=2):
