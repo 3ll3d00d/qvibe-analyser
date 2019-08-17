@@ -23,7 +23,8 @@ from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
 from common import block_signals, ReactorRunner
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
-    SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION
+    SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
+    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX
 from model.checker import VersionChecker, ReleaseNotesDialog
 from model.log import RollingLogger
 from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
@@ -99,14 +100,34 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.actionExport_Wav.triggered.connect(self.export_wav)
         # buffer
         self.bufferSize.setValue(self.preferences.get(BUFFER_SIZE))
+        # magnitude range
+        self.magMin.setValue(self.preferences.get(CHART_MAG_MIN))
+        self.magMax.setValue(self.preferences.get(CHART_MAG_MAX))
+
+        def keep_min_mag_range():
+            keep_range(self.magMin, self.magMax, 20)
+
+        self.magMin.valueChanged['int'].connect(lambda v: keep_min_mag_range())
+        self.magMax.valueChanged['int'].connect(lambda v: keep_min_mag_range())
+        # frequency range
+        self.freqMin.setValue(self.preferences.get(CHART_FREQ_MIN))
+        self.freqMax.setValue(self.preferences.get(CHART_FREQ_MAX))
+
+        def keep_min_freq_range():
+            keep_range(self.freqMin, self.freqMax, 20)
+
+        self.freqMin.valueChanged['int'].connect(lambda v: keep_min_freq_range())
+        self.freqMax.valueChanged['int'].connect(lambda v: keep_min_freq_range())
+
         # charts
         self.__analysers = {
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
-                   self.rtaAverage, self.rtaView, self.smoothRta),
+                   self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
-                           self.resolutionHz, self.bufferSize),
+                           self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
+                           self.activeRecorders, self.visibleCurves),
         }
         self.__start_analysers()
         self.set_visible_chart(self.chartTabs.currentIndex())
@@ -187,6 +208,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.__target_config.accelerometer_sens = int(self.targetAccelSens.currentText())
         self.__target_config.gyro_enabled = self.targetGyroEnabled.isChecked()
         self.__target_config.gyro_sens = int(self.targetGyroSens.currentText())
+        self.freqMax.setMaximum(int(self.__target_config.fs/2))
 
     def __load_config(self):
         ''' loads a config object from the preferences store '''

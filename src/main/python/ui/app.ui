@@ -105,30 +105,7 @@
       </item>
       <item>
        <layout class="QGridLayout" name="extraControlsLayout">
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="bufferSize">
-          <property name="suffix">
-           <string> s</string>
-          </property>
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>240</number>
-          </property>
-          <property name="value">
-           <number>30</number>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="0">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>Elapsed</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
+        <item row="5" column="1">
          <widget class="QSpinBox" name="fps">
           <property name="minimum">
            <number>1</number>
@@ -141,7 +118,68 @@
           </property>
          </widget>
         </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="resolutionHzLabel">
+          <property name="text">
+           <string>Resolution</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="bufferSizeLabel">
+          <property name="text">
+           <string>Buffer</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="magMin">
+          <property name="suffix">
+           <string> dB</string>
+          </property>
+          <property name="maximum">
+           <number>150</number>
+          </property>
+         </widget>
+        </item>
         <item row="0" column="1">
+         <layout class="QHBoxLayout" name="freqLayout">
+          <item>
+           <widget class="QSpinBox" name="freqMin">
+            <property name="suffix">
+             <string> Hz</string>
+            </property>
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="freqMax">
+            <property name="suffix">
+             <string> Hz</string>
+            </property>
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="5" column="0">
+         <widget class="QLabel" name="fpsLabel">
+          <property name="text">
+           <string>Target FPS</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
          <widget class="QComboBox" name="resolutionHz">
           <item>
            <property name="text">
@@ -170,7 +208,54 @@
           </item>
          </widget>
         </item>
+        <item row="6" column="1">
+         <widget class="QSpinBox" name="actualFPS">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="maximum">
+           <number>120</number>
+          </property>
+         </widget>
+        </item>
         <item row="4" column="1">
+         <widget class="QSpinBox" name="bufferSize">
+          <property name="suffix">
+           <string> s</string>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>240</number>
+          </property>
+          <property name="value">
+           <number>30</number>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0">
+         <widget class="QLabel" name="actualFPSLabel">
+          <property name="text">
+           <string>Actual FPS</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" rowspan="2">
+         <widget class="QLabel" name="magRangeLabel">
+          <property name="text">
+           <string>Magnitude</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="0">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Elapsed</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="1">
          <widget class="QTimeEdit" name="elapsedTime">
           <property name="readOnly">
            <bool>true</bool>
@@ -183,41 +268,23 @@
           </property>
          </widget>
         </item>
-        <item row="3" column="1">
-         <widget class="QSpinBox" name="actualFPS">
-          <property name="enabled">
-           <bool>false</bool>
+        <item row="0" column="0">
+         <widget class="QLabel" name="freqLabel">
+          <property name="text">
+           <string>Frequency</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QSpinBox" name="magMax">
+          <property name="suffix">
+           <string> dB</string>
           </property>
           <property name="maximum">
-           <number>120</number>
+           <number>150</number>
           </property>
-         </widget>
-        </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="fpsLabel">
-          <property name="text">
-           <string>Target FPS</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="bufferSizeLabel">
-          <property name="text">
-           <string>Buffer</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="actualFPSLabel">
-          <property name="text">
-           <string>Actual FPS</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="resolutionHzLabel">
-          <property name="text">
-           <string>Resolution</string>
+          <property name="value">
+           <number>150</number>
           </property>
          </widget>
         </item>
@@ -701,6 +768,9 @@
    <property name="text">
     <string>&amp;Preferences</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+P</string>
+   </property>
   </action>
   <action name="actionShow_Logs">
    <property name="text">
@@ -774,7 +844,6 @@
   <tabstop>elapsedTime</tabstop>
   <tabstop>activeRecorders</tabstop>
   <tabstop>visibleCurves</tabstop>
-  <tabstop>chartTabs</tabstop>
   <tabstop>rtaAverage</tabstop>
   <tabstop>rtaChart</tabstop>
   <tabstop>vibrationAnalysis</tabstop>

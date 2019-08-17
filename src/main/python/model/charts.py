@@ -257,7 +257,7 @@ class VisibleChart:
         pass
 
     def reset(self):
-        self.__cached = None
+        self.__cached = {}
         self.__ticks = 0
         self.reset_chart()
 

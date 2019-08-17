@@ -241,12 +241,13 @@ class TimeAxisItem(pg.AxisItem):
         return [str(datetime.timedelta(seconds=value)).split('.')[0] for value in values]
 
 
-def format_pg_plotitem(plot, x_lim, y_lim, y_range=None):
+def format_pg_plotitem(plot, x_lim, y_lim, x_range=None, y_range=None):
     '''
     Applies a standard format to a pyqtgraph chart.
     :param plot: the plot item.
     :param x_lim: the x axis limits.
     :param y_lim: the y axis limits.
+    :param x_range: the visible x limits.
     :param y_range: the visible y limits.
     '''
     label_font = QFont()
@@ -258,6 +259,10 @@ def format_pg_plotitem(plot, x_lim, y_lim, y_range=None):
     plot.disableAutoRange()
     plot.setLimits(xMin=x_lim[0], xMax=x_lim[1], yMin=y_lim[0], yMax=y_lim[1])
     plot.setXRange(*x_lim, padding=0.0)
+    if x_range is None:
+        plot.setXRange(*x_lim, padding=0.0)
+    else:
+        plot.setXRange(*x_range, padding=0.0)
     if y_range is None:
         plot.setYRange(*y_lim, padding=0.0)
     else:

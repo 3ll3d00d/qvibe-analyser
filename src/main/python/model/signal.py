@@ -159,6 +159,9 @@ class AnalysableSignal:
     def prefs(self):
         return self.__preferences
 
+    def has_data(self):
+        return self.__view_mode in self.__output
+
     def set_view(self, view, recalc=True):
         '''
         Analyses the raw data in the specified mode.

@@ -30,7 +30,7 @@ class RTAEvent(ChartEvent):
 class RTA(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, rta_average_widget,
-                 rta_view_widget, smooth_rta_widget):
+                 rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget):
         self.__average = None
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True)
         self.__frame = 0
@@ -42,12 +42,30 @@ class RTA(VisibleChart):
         self.__series = {}
         self.__average_samples = -1
         self.__on_average_change(rta_average_widget.currentText())
+        self.__mag_min = lambda: mag_min_widget.value()
+        self.__mag_max = lambda: mag_max_widget.value()
+        self.__freq_min = lambda: freq_min_widget.value()
+        self.__freq_max = lambda: freq_max_widget.value()
         rta_average_widget.currentTextChanged.connect(self.__on_average_change)
         self.__on_rta_view_change(rta_view_widget.currentText())
         rta_view_widget.currentTextChanged.connect(self.__on_rta_view_change)
         self.__on_rta_smooth_change(Qt.Checked if smooth_rta_widget.isChecked() else Qt.Unchecked)
         smooth_rta_widget.stateChanged.connect(self.__on_rta_smooth_change)
-        format_pg_plotitem(self.__chart.getPlotItem(), (0, self.fs / 2), (0, 150), (40, 120))
+        format_pg_plotitem(self.__chart.getPlotItem(),
+                           (0, self.fs / 2),
+                           (0, 150),
+                           x_range=(self.__freq_min(), self.__freq_max()),
+                           y_range=(self.__mag_min(), self.__mag_max()))
+        mag_min_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
+        mag_max_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
+        freq_min_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
+        freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
+
+    def __on_mag_limit_change(self, val):
+        self.__chart.getPlotItem().setYRange(self.__mag_min(), self.__mag_max(), padding=0)
+
+    def __on_freq_limit_change(self, val):
+        self.__chart.getPlotItem().setXRange(self.__freq_min(), self.__freq_max(), padding=0)
 
     def __on_rta_smooth_change(self, state):
         self.__smooth = state == Qt.Checked

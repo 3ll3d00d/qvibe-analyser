@@ -35,6 +35,11 @@ ANALYSIS_WINDOW_DEFAULT = 'Default'
 ANALYSIS_AVG_WINDOW = 'analysis/avg_window'
 ANALYSIS_PEAK_WINDOW = 'analysis/peak_window'
 
+CHART_MAG_MIN = 'chart/mag_min'
+CHART_MAG_MAX = 'chart/mag_max'
+CHART_FREQ_MIN = 'chart/freq_min'
+CHART_FREQ_MAX = 'chart/freq_max'
+
 SUM_X_SCALE = 'sum/x_scale'
 SUM_Y_SCALE = 'sum/y_scale'
 SUM_Z_SCALE = 'sum/z_scale'
@@ -48,6 +53,10 @@ DEFAULT_PREFS = {
     ANALYSIS_AVG_WINDOW: ANALYSIS_WINDOW_DEFAULT,
     ANALYSIS_PEAK_WINDOW: ANALYSIS_WINDOW_DEFAULT,
     BUFFER_SIZE: 30,
+    CHART_MAG_MIN: 40,
+    CHART_MAG_MAX: 120,
+    CHART_FREQ_MIN: 1,
+    CHART_FREQ_MAX: 125,
     DISPLAY_SMOOTH_GRAPHS: True,
     RECORDER_TARGET_FS: 500,
     RECORDER_TARGET_SAMPLES_PER_BATCH: 8,
@@ -75,6 +84,10 @@ TYPES = {
     RECORDER_TARGET_ACCEL_SENS: int,
     RECORDER_TARGET_GYRO_ENABLED: bool,
     RECORDER_TARGET_GYRO_SENS: int,
+    CHART_MAG_MIN: int,
+    CHART_MAG_MAX: int,
+    CHART_FREQ_MIN: int,
+    CHART_FREQ_MAX: int,
     SUM_X_SCALE: float,
     SUM_Y_SCALE: float,
     SUM_Z_SCALE: float,
@@ -173,8 +186,22 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.xScale.setValue(self.__preferences.get(SUM_X_SCALE))
         self.yScale.setValue(self.__preferences.get(SUM_Y_SCALE))
         self.zScale.setValue(self.__preferences.get(SUM_Z_SCALE))
+        self.magMin.setValue(self.__preferences.get(CHART_MAG_MIN))
+        self.magMax.setValue(self.__preferences.get(CHART_MAG_MAX))
+        self.magMin.valueChanged['int'].connect(self.__balance_mag)
+        self.magMax.valueChanged['int'].connect(self.__balance_mag)
+        self.freqMin.setValue(self.__preferences.get(CHART_FREQ_MIN))
+        self.freqMax.setValue(self.__preferences.get(CHART_FREQ_MAX))
+        self.freqMin.valueChanged['int'].connect(self.__balance_freq)
+        self.freqMax.valueChanged['int'].connect(self.__balance_freq)
         self.wavSaveDir.setText(self.__preferences.get(WAV_DOWNLOAD_DIR))
         self.wavSaveDirPicker.setIcon(qta.icon('fa5s.folder-open'))
+
+    def __balance_mag(self, val):
+        keep_range(self.magMin, self.magMax, 10)
+
+    def __balance_freq(self, val):
+        keep_range(self.freqMin, self.freqMax, 10)
 
     def __reset(self):
         '''
@@ -214,6 +241,10 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.__preferences.set(SUM_Y_SCALE, self.yScale.value())
         self.__preferences.set(SUM_Z_SCALE, self.zScale.value())
         self.__preferences.set(WAV_DOWNLOAD_DIR, self.wavSaveDir.text())
+        self.__preferences.set(CHART_MAG_MIN, self.magMin.value())
+        self.__preferences.set(CHART_MAG_MAX, self.magMax.value())
+        self.__preferences.set(CHART_FREQ_MIN, self.freqMin.value())
+        self.__preferences.set(CHART_FREQ_MAX, self.freqMax.value())
 
         QDialog.accept(self)
 
@@ -231,3 +262,9 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         msg_box.setWindowTitle(title)
         msg_box.exec()
 
+
+def keep_range(min_widget, max_widget, range):
+    if min_widget.value() + range >= max_widget.value():
+        min_widget.setValue(max_widget.value()-range)
+    if max_widget.value() - range <= min_widget.value():
+        max_widget.setValue(min_widget.value()+range)

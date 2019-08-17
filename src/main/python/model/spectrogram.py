@@ -35,7 +35,9 @@ class SpectrogramEvent(ChartEvent):
 
 class Spectrogram(VisibleChart):
 
-    def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, buffer_size_widget):
+    def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, buffer_size_widget,
+                 mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget, active_recorders_widget,
+                 active_signals_widget):
         self.__sens = None
         self.__buffer_size = None
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, True)
@@ -43,39 +45,84 @@ class Spectrogram(VisibleChart):
         self.__staging = None
         self.__buffers = {}
         self.__last_idx = {}
+        self.__recorders = []
+
         self.__qview = chart
-        # self.__gradient = pg.GradientWidget(orientation='right')
-        # self.__gradient.item.restoreState({
-        #     'ticks': colourmap(),
-        #     'mode': 'rgb'
-        # })
-        # self.__histo = pg.HistogramLUTItem()
-        # self.__histo.gradient.restoreState({
-        #     'ticks': colourmap(),
-        #     'mode': 'rgb'
-        # })
-        # self.__qview.addItem(self.__histo)
-        # self.__histo.setLevels(0, 150)
+        self.__mag_min = lambda: mag_min_widget.value()
+        self.__mag_max = lambda: mag_max_widget.value()
+        self.__all_recorders = active_recorders_widget
+        self.__all_signals = active_signals_widget
+
+        self.__visible_recorders = lambda: [i.text() for i in active_recorders_widget.selectedItems()]
+        self.__visible_signals = lambda: [i.text() for i in active_signals_widget.selectedItems()]
+        mag_min_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
+        mag_max_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
+        self.__freq_min = lambda: freq_min_widget.value()
+        self.__freq_max = lambda: freq_max_widget.value()
+        freq_min_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
+        freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
         self.__on_buffer_size_change(buffer_size_widget.value())
-        self.__series['x'] = self.__init_img('x', 0)
-        self.__series['y'] = self.__init_img('y', 1)
-        self.__series['z'] = self.__init_img('z', 2)
         self.__reset_limits()
+        active_recorders_widget.itemSelectionChanged.connect(self.__change_row_viz)
+        active_signals_widget.itemSelectionChanged.connect(self.__change_column_viz)
 
-    def __init_img(self, axis, row):
+    def __change_row_viz(self):
+        for i in range(0, self.__all_recorders.count()):
+            name = self.__all_recorders.item(i).text()
+            visible = name in self.__visible_recorders()
+            found = False
+            for k, v in self.__series.items():
+                if k.startswith(name):
+                    logger.info(f"Setting {k} visible to {visible} at row {i}")
+                    v[0].setVisible(visible)
+                    found = True
+            if found is not True:
+                self.__create_charts(name)
+        self.__qview.resizeEvent(None)
+
+    def __change_column_viz(self):
+        for i in range(0, self.__all_signals.count()):
+            name = self.__all_signals.item(i).text()
+            visible = name in self.__visible_signals()
+            for k, v in self.__series.items():
+                if k.endswith(f":{name}"):
+                    logger.info(f"Setting {k} visible to {visible} at column {i}")
+                    v[0].setVisible(visible)
+        self.__qview.resizeEvent(None)
+
+    def __create_charts(self, recorder):
+        self.__series[f"{recorder}:x"] = self.__init_img(recorder, 'x', len(self.__recorders), 0)
+        self.__series[f"{recorder}:y"] = self.__init_img(recorder, 'y', len(self.__recorders), 1)
+        self.__series[f"{recorder}:z"] = self.__init_img(recorder, 'z', len(self.__recorders), 2)
+        self.__reset_limits()
+        self.__recorders.append(recorder)
+
+    def __on_mag_limit_change(self, val):
+        for ax in self.__series.values():
+            ax[1].setLevels([self.__mag_min(), self.__mag_max()])
+
+    def __on_freq_limit_change(self, val):
+        for ax in self.__series.values():
+            ax[0].setXRange(self.__freq_min(), self.__freq_max(), padding=0)
+
+    def __init_img(self, recorder, axis, row, column):
         # initialise a buffer
         meta = self.__get_meta()
-        self.__buffers[axis] = np.zeros(meta.sxx.T.shape)
+        self.__buffers[f"{recorder}:{axis}"] = np.zeros(meta.sxx.T.shape)
         from qvibe import Inverse
-        p = self.__qview.addPlot(row=0, column=row, axisItems={'left': Inverse(orientation='left')})
+        kargs = {'row': row, 'col': column}
+        if row == 0:
+            kargs['title'] = axis
+        p = self.__qview.addPlot(axisItems={'left': Inverse(orientation='left')}, **kargs)
         # create the chart
         image = pg.ImageItem()
         p.addItem(image)
+        if axis != 'x':
+            p.showAxis('left', show=False)
         pos, rgba_colors = zip(*colourmap())
         image.setLookupTable(pg.ColorMap(pos, rgba_colors).getLookupTable())
-        image.setLevels([0, 150])
-        # self.__histo.setImageItem(image)
+        image.setLevels([self.__mag_min(), self.__mag_max()])
         x_scale = 1.0 / (meta.sxx.shape[0]/meta.f[-1])
         y_scale = (1.0/self.fs) * (self.min_nperseg / 2)
         logger.debug(f"Scaling spectrogram from {meta.sxx.shape} to x: {x_scale} y:{y_scale}")
@@ -90,16 +137,18 @@ class Spectrogram(VisibleChart):
         if self.__buffer_size is not None:
             meta = self.__get_meta()
             for a in self.__series.values():
-                format_pg_plotitem(a[0], (0, meta.f[-1]), (0, meta.t[-1]))
+                format_pg_plotitem(a[0], (0, meta.f[-1]), (0, meta.t[-1]),
+                                   x_range=(self.__freq_min(), self.__freq_max()))
 
     def on_fs_change(self):
         self.__reset_limits()
 
     def reset_chart(self):
-        # for c in self.__series.values():
-        #     self.__chart.removeItem(c)
-        # self.__series = {}
+        for c in self.__series.values():
+            self.__qview.removeItem(c[0])
+        self.__series = {}
         self.__buffers = {}
+        self.__recorders = []
 
     def __get_meta(self):
         rnd = np.random.default_rng().random(size=self.fs * self.__buffer_size)
@@ -116,20 +165,25 @@ class Spectrogram(VisibleChart):
         updates the chart with the latest signal.
         '''
         if self.__staging is not None:
-            self.create_or_update(self.__staging, 'x')
-            self.create_or_update(self.__staging, 'y')
-            self.create_or_update(self.__staging, 'z')
+            if recorder_name in self.__visible_recorders():
+                self.create_or_update(self.__staging, recorder_name, 'x')
+                self.create_or_update(self.__staging, recorder_name, 'y')
+                self.create_or_update(self.__staging, recorder_name, 'z')
 
-    def create_or_update(self, chunks, axis):
+    def create_or_update(self, chunks, recorder, axis):
         c_idx = -len(chunks)
-        buf = np.roll(self.__buffers[axis], c_idx, 0)
+        buf = np.roll(self.__buffers[f"{recorder}:{axis}"], c_idx, 0)
         for idx, c in enumerate(chunks):
+            dat = getattr(c, axis)
+            if dat.has_data() is False:
+                dat.recalc()
+            sxx = dat.get_analysis().sxx
             if c_idx == -1:
-                buf[c_idx:] = getattr(c, axis).get_analysis().sxx.T
+                buf[c_idx:] = sxx.T
             else:
-                buf[c_idx:c_idx+idx] = getattr(c, axis).get_analysis().sxx.T
-        self.__buffers[axis] = buf
-        self.__series[axis][1].setImage(buf.T, autoLevels=False)
+                buf[c_idx:c_idx+idx] = sxx.T
+        self.__buffers[f"{recorder}:{axis}"] = buf
+        self.__series[f"{recorder}:{axis}"][1].setImage(buf.T, autoLevels=False)
 
     def make_event(self, recorder_name, data, idx):
         '''
