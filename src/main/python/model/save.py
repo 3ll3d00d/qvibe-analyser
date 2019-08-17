@@ -1,11 +1,14 @@
 import math
-import pyqtgraph as pg
-from pyqtgraph.exporters import ImageExporter
+import os
 
-from qtpy.QtWidgets import QDialog, QFileDialog
+from pyqtgraph.exporters import ImageExporter
+from qtpy.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
+from scipy.io import wavfile
 
 from common import block_signals
+from model.preferences import WAV_DOWNLOAD_DIR
 from ui.savechart import Ui_saveChartDialog
+from ui.savewav import Ui_saveWavDialog
 
 
 class SaveChartDialog(QDialog, Ui_saveChartDialog):
@@ -57,3 +60,59 @@ class SaveChartDialog(QDialog, Ui_saveChartDialog):
         '''
         self.heightPixels.setValue(int(math.floor(newWidth / self.__aspectRatio)))
 
+
+class SaveWavDialog(QDialog, Ui_saveWavDialog):
+    '''
+    Save WAV dialog
+    '''
+
+    def __init__(self, parent, preferences, recorder_store, fs, sens, statusbar=None):
+        super(SaveWavDialog, self).__init__(parent)
+        self.setupUi(self)
+        self.preferences = preferences
+        self.recorder_store = recorder_store
+        self.fs = fs
+        self.sens = sens
+        for r in self.recorder_store:
+            self.recorder.addItem(r.ip_address)
+        self.statusbar = statusbar
+        self.location.setText(self.preferences.get(WAV_DOWNLOAD_DIR))
+        self.axes.selectAll()
+
+    def select_location(self):
+        dir_name = QFileDialog.getExistingDirectory(self, 'Export WAV', self.location.text(), QFileDialog.ShowDirsOnly)
+        if len(dir_name) > 0:
+            self.location.setText(dir_name)
+
+    def validate_name(self, name):
+        self.buttonBox.button(QDialogButtonBox.Save).setEnabled(len(name) > 0)
+
+    def accept(self):
+        name = self.fileName.text()
+        if len(name) > 0:
+            if name[-4:] != '.wav':
+                name = f"{name}.wav"
+            file_name = os.path.join(self.location.text(), name)
+            output_file = str(file_name[0]).strip()
+            rec = next((r for r in self.recorder_store if r.ip_address == self.recorder.currentText()), None)
+            if rec is not None:
+                _, data, _, _ = rec.snap()
+                if data.shape[0] > 0:
+                    columns = [self.__idx(t.text()) for t in self.axes.selectedItems()]
+                    samples = data[:, columns] / self.sens
+                    wavfile.write(file_name, self.fs, samples)
+                    if self.statusbar is not None:
+                        self.statusbar.showMessage(f"Saved {self.recorder.currentText()} to {output_file}", 5000)
+                else:
+                    if self.statusbar is not None:
+                        self.statusbar.showMessage(f"{self.recorder.currentText()} has no data")
+            QDialog.accept(self)
+
+    @staticmethod
+    def __idx(axis):
+        if axis == 'x':
+            return 2
+        elif axis == 'y':
+            return 3
+        elif axis == 'z':
+            return 4

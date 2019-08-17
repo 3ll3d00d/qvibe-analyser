@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import pyqtgraph as pg
 
-from common import format_pg_chart
+from common import format_pg_plotitem
 from model.charts import VisibleChart
 
 logger = logging.getLogger('qvibe.vibration')
@@ -42,7 +42,7 @@ class Vibration(VisibleChart):
 
     def __reset_limits(self):
         if self.__buffer_size is not None and self.__sens is not None:
-            format_pg_chart(self.__chart, (0, self.__buffer_size), (-self.__sens, self.__sens))
+            format_pg_plotitem(self.__chart.getPlotItem(), (0, self.__buffer_size), (-self.__sens, self.__sens))
 
     def reset_chart(self):
         for c in self.__series.values():

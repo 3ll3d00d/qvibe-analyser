@@ -378,7 +378,7 @@
          </attribute>
          <layout class="QGridLayout" name="gridLayout">
           <item row="0" column="0">
-           <widget class="PlotWidgetForSpectrum" name="spectrogramView"/>
+           <widget class="GraphicsLayoutWidget" name="spectrogramView"/>
           </item>
          </layout>
         </widget>
@@ -667,6 +667,7 @@
      <string>&amp;File</string>
     </property>
     <addaction name="actionSave_Chart"/>
+    <addaction name="actionExport_Wav"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuSettings"/>
@@ -721,6 +722,20 @@
    <property name="shortcut">
     <string>Ctrl+S</string>
    </property>
+   <property name="shortcutContext">
+    <enum>Qt::ApplicationShortcut</enum>
+   </property>
+  </action>
+  <action name="actionExport_Wav">
+   <property name="text">
+    <string>Export &amp;Wav</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+W</string>
+   </property>
+   <property name="shortcutContext">
+    <enum>Qt::ApplicationShortcut</enum>
+   </property>
   </action>
  </widget>
  <customwidgets>
@@ -733,6 +748,11 @@
    <class>PlotWidgetForSpectrum</class>
    <extends>QGraphicsView</extends>
    <header>qvibe</header>
+  </customwidget>
+  <customwidget>
+   <class>GraphicsLayoutWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <tabstops>

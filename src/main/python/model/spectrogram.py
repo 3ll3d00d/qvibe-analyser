@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import pyqtgraph as pg
 
-from common import format_pg_chart, colourmap
+from common import format_pg_plotitem, colourmap
 from model.charts import VisibleChart, ChartEvent
 from model.signal import Signal, TriAxisSignal
 
@@ -43,9 +43,44 @@ class Spectrogram(VisibleChart):
         self.__staging = None
         self.__buffers = {}
         self.__last_idx = {}
-        self.__chart = chart
+        self.__qview = chart
+        # self.__gradient = pg.GradientWidget(orientation='right')
+        # self.__gradient.item.restoreState({
+        #     'ticks': colourmap(),
+        #     'mode': 'rgb'
+        # })
+        # self.__histo = pg.HistogramLUTItem()
+        # self.__histo.gradient.restoreState({
+        #     'ticks': colourmap(),
+        #     'mode': 'rgb'
+        # })
+        # self.__qview.addItem(self.__histo)
+        # self.__histo.setLevels(0, 150)
         buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
         self.__on_buffer_size_change(buffer_size_widget.value())
+        self.__series['x'] = self.__init_img('x', 0)
+        self.__series['y'] = self.__init_img('y', 1)
+        self.__series['z'] = self.__init_img('z', 2)
+        self.__reset_limits()
+
+    def __init_img(self, axis, row):
+        # initialise a buffer
+        meta = self.__get_meta()
+        self.__buffers[axis] = np.zeros(meta.sxx.T.shape)
+        from qvibe import Inverse
+        p = self.__qview.addPlot(row=0, column=row, axisItems={'left': Inverse(orientation='left')})
+        # create the chart
+        image = pg.ImageItem()
+        p.addItem(image)
+        pos, rgba_colors = zip(*colourmap())
+        image.setLookupTable(pg.ColorMap(pos, rgba_colors).getLookupTable())
+        image.setLevels([0, 150])
+        # self.__histo.setImageItem(image)
+        x_scale = 1.0 / (meta.sxx.shape[0]/meta.f[-1])
+        y_scale = (1.0/self.fs) * (self.min_nperseg / 2)
+        logger.debug(f"Scaling spectrogram from {meta.sxx.shape} to x: {x_scale} y:{y_scale}")
+        image.scale(x_scale, y_scale)
+        return p, image
 
     def __on_buffer_size_change(self, size):
         self.__buffer_size = size
@@ -54,17 +89,16 @@ class Spectrogram(VisibleChart):
     def __reset_limits(self):
         if self.__buffer_size is not None:
             meta = self.__get_meta()
-            format_pg_chart(self.__chart, (0, meta.f[-1]), (0, meta.t[-1]))
-            self.__chart.setLabel('bottom', 'Frequency', units='Hz')
-            self.__chart.setLabel('left', 'Time', units='s')
+            for a in self.__series.values():
+                format_pg_plotitem(a[0], (0, meta.f[-1]), (0, meta.t[-1]))
 
     def on_fs_change(self):
         self.__reset_limits()
 
     def reset_chart(self):
-        for c in self.__series.values():
-            self.__chart.removeItem(c)
-        self.__series = {}
+        # for c in self.__series.values():
+        #     self.__chart.removeItem(c)
+        # self.__series = {}
         self.__buffers = {}
 
     def __get_meta(self):
@@ -83,23 +117,10 @@ class Spectrogram(VisibleChart):
         '''
         if self.__staging is not None:
             self.create_or_update(self.__staging, 'x')
+            self.create_or_update(self.__staging, 'y')
+            self.create_or_update(self.__staging, 'z')
 
     def create_or_update(self, chunks, axis):
-        if axis not in self.__series:
-            # initialise a buffer
-            meta = self.__get_meta()
-            self.__buffers[axis] = np.zeros(meta.sxx.T.shape)
-            # create the chart
-            image = pg.ImageItem()
-            self.__chart.addItem(image)
-            pos, rgba_colors = zip(*colourmap())
-            image.setLookupTable(pg.ColorMap(pos, rgba_colors).getLookupTable())
-            image.setLevels([0, 150])
-            self.__series[axis] = image
-            x_scale = 1.0 / (meta.sxx.shape[0]/meta.f[-1])
-            y_scale = (1.0/self.fs) * (self.min_nperseg / 2)
-            logger.info(f"Scaling spectrogram from {meta.sxx.shape} to x: {x_scale} y:{y_scale}")
-            self.__series[axis].scale(x_scale, y_scale)
         c_idx = -len(chunks)
         buf = np.roll(self.__buffers[axis], c_idx, 0)
         for idx, c in enumerate(chunks):
@@ -108,7 +129,7 @@ class Spectrogram(VisibleChart):
             else:
                 buf[c_idx:c_idx+idx] = getattr(c, axis).get_analysis().sxx.T
         self.__buffers[axis] = buf
-        self.__series[axis].setImage(buf.T, autoLevels=False)
+        self.__series[axis][1].setImage(buf.T, autoLevels=False)
 
     def make_event(self, recorder_name, data, idx):
         '''

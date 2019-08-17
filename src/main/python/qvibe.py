@@ -4,7 +4,7 @@ import sys
 import time
 
 from model.rta import RTA
-from model.save import SaveChartDialog
+from model.save import SaveChartDialog, SaveWavDialog
 from model.spectrogram import Spectrogram
 from model.vibration import Vibration
 
@@ -96,6 +96,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.actionShow_Logs.triggered.connect(self.log_viewer.show_logs)
         self.action_Preferences.triggered.connect(self.show_preferences)
         self.actionSave_Chart.triggered.connect(self.export_chart)
+        self.actionExport_Wav.triggered.connect(self.export_wav)
         # buffer
         self.bufferSize.setValue(self.preferences.get(BUFFER_SIZE))
         # charts
@@ -268,6 +269,17 @@ class QVibe(QMainWindow, Ui_MainWindow):
             chart = self.spectrogramView
         if chart is not None:
             dialog = SaveChartDialog(self, self.__analysers[idx].__class__.__name__, chart, self.statusbar)
+            dialog.exec()
+
+    def export_wav(self):
+        ''' Saves data from a recorder to a file. '''
+        if len(self.__recorder_store) > 0:
+            dialog = SaveWavDialog(self,
+                                   self.preferences,
+                                   self.__recorder_store,
+                                   self.targetSampleRate.value(),
+                                   int(self.targetAccelSens.currentText()),
+                                   self.statusbar)
             dialog.exec()
 
     def show_release_notes(self):

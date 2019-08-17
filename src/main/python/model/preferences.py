@@ -1,7 +1,7 @@
-import glob
-from pathlib import Path
+import os
+import qtawesome as qta
 
-from qtpy.QtWidgets import QDialog, QMessageBox, QDialogButtonBox
+from qtpy.QtWidgets import QDialog, QMessageBox, QDialogButtonBox, QFileDialog
 
 from ui.preferences import Ui_preferencesDialog
 
@@ -39,6 +39,8 @@ SUM_X_SCALE = 'sum/x_scale'
 SUM_Y_SCALE = 'sum/y_scale'
 SUM_Z_SCALE = 'sum/z_scale'
 
+WAV_DOWNLOAD_DIR = 'wav/download_dir'
+
 
 DEFAULT_PREFS = {
     ANALYSIS_RESOLUTION: 1.0,
@@ -59,6 +61,7 @@ DEFAULT_PREFS = {
     STYLE_MATPLOTLIB_THEME: STYLE_MATPLOTLIB_THEME_DEFAULT,
     SYSTEM_CHECK_FOR_UPDATES: True,
     SYSTEM_CHECK_FOR_BETA_UPDATES: False,
+    WAV_DOWNLOAD_DIR: os.path.join(os.path.expanduser('~'), 'Music'),
 }
 
 TYPES = {
@@ -165,11 +168,13 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.setupUi(self)
         self.__preferences = preferences
         self.buttonBox.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self.__reset)
-
-        # self.init_combo(STYLE_MATPLOTLIB_THEME, self.themePicker)
-
         self.checkForUpdates.setChecked(self.__preferences.get(SYSTEM_CHECK_FOR_UPDATES))
         self.checkForBetaUpdates.setChecked(self.__preferences.get(SYSTEM_CHECK_FOR_BETA_UPDATES))
+        self.xScale.setValue(self.__preferences.get(SUM_X_SCALE))
+        self.yScale.setValue(self.__preferences.get(SUM_Y_SCALE))
+        self.zScale.setValue(self.__preferences.get(SUM_Z_SCALE))
+        self.wavSaveDir.setText(self.__preferences.get(WAV_DOWNLOAD_DIR))
+        self.wavSaveDirPicker.setIcon(qta.icon('fa5s.folder-open'))
 
     def __reset(self):
         '''
@@ -184,15 +189,6 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
             self.__preferences.reset()
             self.alert_on_change('Defaults Restored')
             self.reject()
-
-    def __init_themes(self):
-        '''
-        Adds all the available matplotlib theme names to a combo along with our internal theme names.
-        '''
-        for p in glob.iglob(f"{self.__style_root}/style/mpl/*.mplstyle"):
-            self.themePicker.addItem(Path(p).resolve().stem)
-        # for style_name in sorted(style.library.keys()):
-        #     self.themePicker.addItem(style_name)
 
     def init_combo(self, key, combo, translater=lambda a: a):
         '''
@@ -212,14 +208,20 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         '''
         Saves the locations if they exist.
         '''
-        # current_theme = self.__preferences.get(STYLE_MATPLOTLIB_THEME)
-        # if current_theme is not None and current_theme != self.themePicker.currentText():
-        #     self.alert_on_change('Theme Change')
-        # self.__preferences.set(STYLE_MATPLOTLIB_THEME, self.themePicker.currentText())
         self.__preferences.set(SYSTEM_CHECK_FOR_UPDATES, self.checkForUpdates.isChecked())
         self.__preferences.set(SYSTEM_CHECK_FOR_BETA_UPDATES, self.checkForBetaUpdates.isChecked())
+        self.__preferences.set(SUM_X_SCALE, self.xScale.value())
+        self.__preferences.set(SUM_Y_SCALE, self.yScale.value())
+        self.__preferences.set(SUM_Z_SCALE, self.zScale.value())
+        self.__preferences.set(WAV_DOWNLOAD_DIR, self.wavSaveDir.text())
 
         QDialog.accept(self)
+
+    def pick_save_dir(self):
+        dir_name = QFileDialog.getExistingDirectory(self, 'Export WAV', self.wavSaveDir.text(),
+                                                    QFileDialog.ShowDirsOnly)
+        if len(dir_name) > 0:
+            self.wavSaveDir.setText(dir_name)
 
     def alert_on_change(self, title, text='Change will not take effect until the application is restarted',
                         icon=QMessageBox.Warning):

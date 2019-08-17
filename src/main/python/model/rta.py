@@ -4,7 +4,7 @@ import pyqtgraph as pg
 
 from qtpy.QtCore import Qt
 
-from common import format_pg_chart
+from common import format_pg_plotitem
 from model.charts import VisibleChart, ChartEvent
 
 logger = logging.getLogger('qvibe.rta')
@@ -47,7 +47,7 @@ class RTA(VisibleChart):
         rta_view_widget.currentTextChanged.connect(self.__on_rta_view_change)
         self.__on_rta_smooth_change(Qt.Checked if smooth_rta_widget.isChecked() else Qt.Unchecked)
         smooth_rta_widget.stateChanged.connect(self.__on_rta_smooth_change)
-        format_pg_chart(self.__chart, (0, self.fs / 2), (0, 150), (40, 120))
+        format_pg_plotitem(self.__chart.getPlotItem(), (0, self.fs / 2), (0, 150), (40, 120))
 
     def __on_rta_smooth_change(self, state):
         self.__smooth = state == Qt.Checked
