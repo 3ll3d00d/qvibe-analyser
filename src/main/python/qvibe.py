@@ -8,6 +8,7 @@ from model.save import SaveChartDialog, SaveWavDialog
 from model.spectrogram import Spectrogram
 from model.vibration import Vibration
 
+os.environ['PYQTGRAPH_QT_LIB'] = 'PyQt5'
 os.environ['QT_API'] = 'pyqt5'
 if sys.platform == 'win32' and getattr(sys, '_MEIPASS', False):
     # Workaround for PyInstaller being unable to find Qt5Core.dll on PATH.
