@@ -10,10 +10,10 @@ from model.vibration import Vibration
 
 os.environ['PYQTGRAPH_QT_LIB'] = 'PyQt5'
 os.environ['QT_API'] = 'pyqt5'
-if sys.platform == 'win32' and getattr(sys, '_MEIPASS', False):
+# if sys.platform == 'win32' and getattr(sys, '_MEIPASS', False):
     # Workaround for PyInstaller being unable to find Qt5Core.dll on PATH.
     # See https://github.com/pyinstaller/pyinstaller/issues/4293
-    os.environ['PATH'] = sys._MEIPASS + os.pathsep + os.environ['PATH']
+    # os.environ['PATH'] = sys._MEIPASS + os.pathsep + os.environ['PATH']
 
 import pyqtgraph as pg
 import qtawesome as qta

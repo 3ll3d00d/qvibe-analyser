@@ -86,7 +86,7 @@ before_script:
 script:
 - PYTHONPATH=./src/main/python $PRUN pytest $COVERAGE_ARGS
 before_deploy:
-- $PRUN $PBIN install pyinstaller
+- $PRUN $PBIN install https://github.com/pyinstaller/pyinstaller/archive/develop.zip
 - $PRUN pyinstaller --clean --log-level=INFO ${DEBUG_FLAG} -F qvibe-analyser.spec
 - |
   if [[ "$TRAVIS_OS_NAME" == "osx" ]]
