@@ -1,121 +1,121 @@
 language: python
 cache:
   directories:
-    - "$PIP_CACHE_DIR"
-    - "$PIPENV_CACHE_DIR"
+  - "$PIP_CACHE_DIR"
+  - "$PIPENV_CACHE_DIR"
 env:
   global:
-    - PIP_CACHE_DIR=$HOME/.cache/pip
-    - PIPENV_CACHE_DIR=$HOME/.cache/pipenv
-    - PIPENV_VENV_IN_PROJECT=yes
+  - PIP_CACHE_DIR=$HOME/.cache/pip
+  - PIPENV_CACHE_DIR=$HOME/.cache/pipenv
+  - PIPENV_VENV_IN_PROJECT=yes
 matrix:
   fast_finish: true
   include:
-    - name: Xenial Linux
-      python: '3.7'
-      dist: xenial
-      env:
-        - PIPENV_VERBOSITY=-1
-        - COVERAGE_ARGS="--cov=./src/main/python"
-        - PBIN=pip3
-        - PRUN="pipenv run"
-      before_install:
-        - pip3 install --upgrade pip
-      after_success:
-        - bash <(curl -s https://codecov.io/bash)
-    - name: OSX
-      os: osx
-      osx_image: xcode10.2
-      language: shell
-      env:
-        - PBIN=pip3
-        - PRUN="pipenv run"
-      before_install:
-        - pip3 install --upgrade pip
-    - name: Conda on Windows
-      os: windows
-      language: shell
-      env:
-        - PATH="/c/tools/miniconda3/:/c/tools/miniconda3/Library/mingw-w64:/c/tools/miniconda3/Library/usr/bin:/c/tools/miniconda3/Library/bin:/c/tools/miniconda3/Scripts:/c/tools/miniconda3/bin:$PATH"
-        - PBIN=pip
-        - PRUN=
-      before_install:
-        - choco install miniconda3 openssl.light nsis
-        - conda config --set always_yes yes --set changeps1 no
-        - conda update -n base -c defaults conda python
-        - conda create -q -n test python=$TRAVIS_PYTHON_VERSION scipy numpy
-        - source activate test
-        - python -m pip install --upgrade pip
-      install:
-        - pip install pipenv
-        - pipenv lock -r | tail -n +2  > requirements.txt
-        - pip install -r requirements.txt
-        - pipenv lock -r --dev | tail -n +2 > requirements.txt
-        - pip install -r requirements.txt
-        - conda list
-        - pip list
-    - name: Pip on Windows
-      os: windows
-      language: shell
-      env:
-        - NO_MKL=Y
-        - PBIN=pip
-        - PRUN="pipenv run"
-        - PATH=/c/Python37:/c/Python37/Scripts:$PATH
-      before_install:
-        - choco install python openssl.light nsis
+  - name: Xenial Linux
+    python: '3.7'
+    dist: xenial
+    env:
+    - PIPENV_VERBOSITY=-1
+    - COVERAGE_ARGS="--cov=./src/main/python"
+    - PBIN=pip3
+    - PRUN="pipenv run"
+    before_install:
+    - pip3 install --upgrade pip
+    after_success:
+    - bash <(curl -s https://codecov.io/bash)
+  - name: OSX
+    os: osx
+    osx_image: xcode10.2
+    language: shell
+    env:
+    - PBIN=pip3
+    - PRUN="pipenv run"
+    before_install:
+    - pip3 install --upgrade pip
+  - name: Conda on Windows
+    os: windows
+    language: shell
+    env:
+    - PATH="/c/tools/miniconda3/:/c/tools/miniconda3/Library/mingw-w64:/c/tools/miniconda3/Library/usr/bin:/c/tools/miniconda3/Library/bin:/c/tools/miniconda3/Scripts:/c/tools/miniconda3/bin:$PATH"
+    - PBIN=pip
+    - PRUN=
+    before_install:
+    - choco install miniconda3 openssl.light nsis
+    - conda config --set always_yes yes --set changeps1 no
+    - conda update -n base -c defaults conda python
+    - conda create -q -n test python=$TRAVIS_PYTHON_VERSION scipy numpy
+    - source activate test
+    - python -m pip install --upgrade pip
+    install:
+    - pip install pipenv
+    - pipenv lock -r | tail -n +2  > requirements.txt
+    - pip install -r requirements.txt
+    - pipenv lock -r --dev | tail -n +2 > requirements.txt
+    - pip install -r requirements.txt
+    - conda list
+    - pip list
+  - name: Pip on Windows
+    os: windows
+    language: shell
+    env:
+    - NO_MKL=Y
+    - PBIN=pip
+    - PRUN="pipenv run"
+    - PATH=/c/Python37:/c/Python37/Scripts:$PATH
+    before_install:
+    - choco install python openssl.light nsis
 addons:
   apt:
     packages:
-      - libblas-dev
-      - liblapack-dev
+    - libblas-dev
+    - liblapack-dev
   homebrew:
     packages:
-      - pipenv
+    - pipenv
 install:
-  - $PBIN install pipenv
-  - pipenv install -d
-  - $PBIN list
-  - pipenv run $PBIN list
+- $PBIN install pipenv
+- pipenv install -d
+- $PBIN list
+- pipenv run $PBIN list
 before_script:
-  - |
-    if [[ -n ${TRAVIS_TAG} ]]
-    then
-      echo $TRAVIS_TAG > src/main/python/VERSION
-    fi
+- |
+  if [[ -n ${TRAVIS_TAG} ]]
+  then
+    echo $TRAVIS_TAG > src/main/python/VERSION
+  fi
 script:
-  - PYTHONPATH=./src/main/python $PRUN pytest $COVERAGE_ARGS
+- PYTHONPATH=./src/main/python $PRUN pytest $COVERAGE_ARGS
 before_deploy:
-  - $PRUN $PBIN install pyinstaller
-  - |
-    [[ ${TRAVIS_TAG} =~ ^([0-9]+\.){2}[0-9]+\-[a-z]+\.[0-9]+$ ]] && DEBUG_FLAG=" --debug=imports --debug=bootloader"
-  - $PRUN pyinstaller --clean --log-level=INFO ${DEBUG_FLAG} -F qvibe-analyser.spec
-  - |
-    if [[ "$TRAVIS_OS_NAME" == "osx" ]]
-    then
-      pushd dist
-      rm qvibe-analyser
-      zip -r qvibe-analyser.app.zip qvibe-analyser.app
-      rm -Rf qvibe-analyser.app
-      popd
-    elif [[ "$TRAVIS_OS_NAME" == "windows" ]]
-    then
-      export USE_NSIS=Y
-      mv dist/qvibe-analyser.exe dist/bak.exe
-      $PRUN pyinstaller --clean --log-level=INFO -D qvibe-analyser.spec
-      "/c/Program Files (x86)/NSIS/makensis.exe" src/main/nsis/Installer.nsi
-      mv dist/bak.exe dist/qvibe-analyser.exe
-    fi
-  - |
-    if [[ "$NO_MKL" == "Y" ]]
-    then
-      mv dist/qvibe-analyser.exe dist/qvibe-analyser_small.exe
-      mv dist/qvibe-analyserSetup.exe dist/qvibe-analyserSetup_small.exe
-    fi
+- $PRUN $PBIN install pyinstaller
+- |
+  [[ ${TRAVIS_TAG} =~ ^([0-9]+\.){2}[0-9]+\-[a-z]+\.[0-9]+$ ]] && DEBUG_FLAG=" --debug=imports --debug=bootloader"
+- $PRUN pyinstaller --clean --log-level=INFO ${DEBUG_FLAG} -F qvibe-analyser.spec
+- |
+  if [[ "$TRAVIS_OS_NAME" == "osx" ]]
+  then
+    pushd dist
+    rm qvibe-analyser
+    zip -r qvibe-analyser.app.zip qvibe-analyser.app
+    rm -Rf qvibe-analyser.app
+    popd
+  elif [[ "$TRAVIS_OS_NAME" == "windows" ]]
+  then
+    export USE_NSIS=Y
+    mv dist/qvibe-analyser.exe dist/bak.exe
+    $PRUN pyinstaller --clean --log-level=INFO -D qvibe-analyser.spec
+    "/c/Program Files (x86)/NSIS/makensis.exe" src/main/nsis/Installer.nsi
+    mv dist/bak.exe dist/qvibe-analyser.exe
+  fi
+- |
+  if [[ "$NO_MKL" == "Y" ]]
+  then
+    mv dist/qvibe-analyser.exe dist/qvibe-analyser_small.exe
+    mv dist/qvibe-analyserSetup.exe dist/qvibe-analyserSetup_small.exe
+  fi
 deploy:
   provider: releases
   api_key:
-    secure: a2Ju6IVLQjD2RTNlIhDe9saFGcNfdr+F9P2LO1q4zT8Bke8EGlDlBeE5xKmMhD7KWiS5IJDJz9djXlqI0JG3D2Tve2VhpYrLUD7mABTxIZqKReYXL5b/p4B4mkg0KLlUHleyu4t2GWZ1+PNPmCO3Q0G1k7aNl8NQb2wZMBujaKFM/HHf9PBS7ioROrnJjW2VlNg86YDCKZKUYOGc1tOgIYrwX0h4HqE0/oHj7ZNAxLqi2OYr22To4NFJCnMPXxF81n95N2o7AlwLUElaSdHC5D2OPgCVATDzkX7MzD2cpkI1ca0a5exqo3pdX3q0wofygWj3zNwVWKbub+poLtKFV2BowCWrr89UPZYPXlmnivolD5cfFRpgO8SABYnVWzXWhsaxdS2xEBL/SZ0ssuuPiJRSWjsiunjTPQBDoqxBYPSPlUcKbvrE6mcmfjCREQKdXVSnJRtEGhA/JD91oDtNbOr2Vk+u3hSwpNcSr1oXmG/J2PCGgsjcY+RKv/aGF4CzFdBYya4PGqODhiaZKKSW8rKub5ZW+c+8ELCRk5Fu3DAWVvJN7ZhVVuR+gYPG+avKDYwXF1/NwX/IXumS5a8LAwnZTVtzPRwntQr9rIJfXqNaCV1sFFJ+MDaf8K4u0P8T3yGtRO1BtfTYyO+YXRrBMCn4VZ2dN7Qv5L1YdIpbm1M=
+    secure: jtvKOIp7RnBbnlQ2L8D7vQ8V3VsQTZBJll/2CcumKYQEjQ/HL3IccyifkaBP/u2sWfO6EF4nZu9EZHE3RrY4TWRtyf5RbN7KuUfqRdH/njZCHYFqeAywLgAk0P5ame1HmGki04cZVT9C0NryCMYMg8W2uAqRoHsnQgIXWrobzx0S5v6kttnNUNs6ZaaCxS7px4tcgx/q7AdbpKivMK1XzHlJGnyjTzrnjxjRU1WYfHCks8GiNMuiaRsJE2DuX3PUqx+9f5+nwN+s8WcQD47JEkZh9JiKTIMJPWzeOyhcPNkGTkhFf4LmP9h5KugapMyhSamRmLRzYI0IuqEnsAT6cgu2TZ4ZGkuMUEFCpZqHwb2k3UzdUSb55CKmlsQgZhuQAbyvO0XqDlygiVCVulzb7JgFZvd49+ZFQvGLEgPa3UwAlO+9p6L0CAeDWYMCs+tFUqbcKp13E1G53Kowsqcr7CgC62iQfAIUoVApKe+p5OpakdsdAEwcayAu/nym/4EBOY5hKZU1VRae92863Lx4IbY2h01TBZKi8QwC4LRntkakCjpzMieYWj75EojgKbB8kL75gMJtlS38ZgF5vZgtWPkrYOKEdxuUFF3Ix0BEzs9kl4PxhmFeH5yk77zeuH2qHABcwRNgm8/RlWf0hey1ArW/K9Z7OTtueybqsbCZLpQ=
   file_glob: true
   file: dist/qvibe-analyser*
   on:
