@@ -114,7 +114,9 @@ class Spectrogram(VisibleChart):
         kargs = {'row': row, 'col': column}
         if row == 0:
             kargs['title'] = axis
-        p = self.__qview.addPlot(axisItems={'left': Inverse(orientation='left')}, **kargs)
+        # kargs['axisItems'] = {'left': Inverse(orientation='left')}
+        p = self.__qview.addPlot(**kargs)
+        p.getViewBox().invertY(True)
         # create the chart
         image = pg.ImageItem()
         p.addItem(image)
@@ -171,17 +173,15 @@ class Spectrogram(VisibleChart):
                 self.create_or_update(self.__staging, recorder_name, 'z')
 
     def create_or_update(self, chunks, recorder, axis):
-        c_idx = -len(chunks)
-        buf = np.roll(self.__buffers[f"{recorder}:{axis}"], c_idx, 0)
+        c_idx = len(chunks)
+        buf = self.__buffers[f"{recorder}:{axis}"]
+        buf = np.roll(buf, c_idx, 0)
         for idx, c in enumerate(chunks):
             dat = getattr(c, axis)
             if dat.has_data() is False:
                 dat.recalc()
             sxx = dat.get_analysis().sxx
-            if c_idx == -1:
-                buf[c_idx:] = sxx.T
-            else:
-                buf[c_idx:c_idx+idx] = sxx.T
+            buf[c_idx-idx-1] = sxx.T
         self.__buffers[f"{recorder}:{axis}"] = buf
         self.__series[f"{recorder}:{axis}"][1].setImage(buf.T, autoLevels=False)
 

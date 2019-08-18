@@ -454,7 +454,7 @@
      </layout>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="addRecorderLayout" stretch="0,0,0,0,0,0,0">
+     <layout class="QVBoxLayout" name="addRecorderLayout" stretch="0,0,0,0,0,0">
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -666,24 +666,6 @@
        <layout class="QVBoxLayout" name="recordersLayout"/>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="buttonLayout">
-        <item>
-         <widget class="QPushButton" name="addRecorderButton">
-          <property name="text">
-           <string>Add New</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="saveRecordersButton">
-          <property name="text">
-           <string>Save</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
        <spacer name="verticalSpacer">
         <property name="orientation">
          <enum>Qt::Vertical</enum>
@@ -827,28 +809,33 @@
  </customwidgets>
  <tabstops>
   <tabstop>targetSampleRate</tabstop>
+  <tabstop>applyTargetButton</tabstop>
   <tabstop>targetBatchSize</tabstop>
+  <tabstop>resetTargetButton</tabstop>
   <tabstop>targetAccelEnabled</tabstop>
   <tabstop>targetAccelSens</tabstop>
   <tabstop>targetGyroEnabled</tabstop>
   <tabstop>targetGyroSens</tabstop>
-  <tabstop>applyTargetButton</tabstop>
-  <tabstop>resetTargetButton</tabstop>
-  <tabstop>addRecorderButton</tabstop>
-  <tabstop>saveRecordersButton</tabstop>
   <tabstop>resetButton</tabstop>
+  <tabstop>activeRecorders</tabstop>
+  <tabstop>visibleCurves</tabstop>
+  <tabstop>freqMin</tabstop>
+  <tabstop>freqMax</tabstop>
+  <tabstop>magMax</tabstop>
+  <tabstop>magMin</tabstop>
   <tabstop>resolutionHz</tabstop>
   <tabstop>bufferSize</tabstop>
   <tabstop>fps</tabstop>
   <tabstop>actualFPS</tabstop>
   <tabstop>elapsedTime</tabstop>
-  <tabstop>activeRecorders</tabstop>
-  <tabstop>visibleCurves</tabstop>
-  <tabstop>rtaAverage</tabstop>
-  <tabstop>rtaChart</tabstop>
+  <tabstop>chartTabs</tabstop>
   <tabstop>vibrationAnalysis</tabstop>
   <tabstop>liveVibrationChart</tabstop>
+  <tabstop>rtaAverage</tabstop>
+  <tabstop>rtaChart</tabstop>
   <tabstop>rtaView</tabstop>
+  <tabstop>smoothRta</tabstop>
+  <tabstop>spectrogramView</tabstop>
  </tabstops>
  <resources/>
  <connections>
@@ -981,22 +968,6 @@
    </hints>
   </connection>
   <connection>
-   <sender>saveRecordersButton</sender>
-   <signal>clicked()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>save_recorders()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>1000</x>
-     <y>345</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>757</x>
-     <y>251</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>bufferSize</sender>
    <signal>valueChanged(int)</signal>
    <receiver>MainWindow</receiver>
@@ -1013,30 +984,14 @@
    </hints>
   </connection>
   <connection>
-   <sender>addRecorderButton</sender>
-   <signal>clicked()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>add_new_recorder()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>887</x>
-     <y>353</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>778</x>
-     <y>371</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>chartTabs</sender>
    <signal>currentChanged(int)</signal>
    <receiver>MainWindow</receiver>
    <slot>set_visible_chart()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>220</x>
-     <y>69</y>
+     <x>490</x>
+     <y>106</y>
     </hint>
     <hint type="destinationlabel">
      <x>170</x>
@@ -1067,8 +1022,8 @@
    <slot>set_visible_curves()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>51</x>
-     <y>330</y>
+     <x>58</x>
+     <y>286</y>
     </hint>
     <hint type="destinationlabel">
      <x>32</x>
@@ -1083,8 +1038,8 @@
    <slot>set_visible_recorders()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>142</x>
-     <y>209</y>
+     <x>149</x>
+     <y>172</y>
     </hint>
     <hint type="destinationlabel">
      <x>136</x>
@@ -1094,13 +1049,9 @@
   </connection>
  </connections>
  <slots>
-  <slot>add_new_recorder()</slot>
   <slot>reset_target()</slot>
   <slot>apply_target()</slot>
   <slot>update_target()</slot>
-  <slot>connect_recorder()</slot>
-  <slot>disconnect_recorder()</slot>
-  <slot>save_recorders()</slot>
   <slot>set_buffer_size()</slot>
   <slot>set_visible_chart()</slot>
   <slot>reset_recording()</slot>

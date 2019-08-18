@@ -1,6 +1,7 @@
 import os
 import qtawesome as qta
 
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QDialog, QMessageBox, QDialogButtonBox, QFileDialog
 
 from ui.preferences import Ui_preferencesDialog
@@ -175,9 +176,10 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
     Allows user to set some basic preferences.
     '''
 
-    def __init__(self, preferences, style_root, parent=None):
+    def __init__(self, preferences, style_root, recorder_store, parent=None):
         super(PreferencesDialog, self).__init__(parent)
         self.__style_root = style_root
+        self.__recorder_store = recorder_store
         self.setupUi(self)
         self.__preferences = preferences
         self.buttonBox.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self.__reset)
@@ -196,12 +198,50 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.freqMax.valueChanged['int'].connect(self.__balance_freq)
         self.wavSaveDir.setText(self.__preferences.get(WAV_DOWNLOAD_DIR))
         self.wavSaveDirPicker.setIcon(qta.icon('fa5s.folder-open'))
+        self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
+        self.deleteRecorderButton.setIcon(qta.icon('fa5s.times'))
+        ips = self.__preferences.get(RECORDER_SAVED_IPS).split('|')
+        for ip in ips:
+            self.recorders.addItem(ip)
+        self.deleteRecorderButton.setEnabled(len(ips) > 0)
+        self.addRecorderButton.setEnabled(False)
 
     def __balance_mag(self, val):
         keep_range(self.magMin, self.magMax, 10)
 
     def __balance_freq(self, val):
         keep_range(self.freqMin, self.freqMax, 10)
+
+    def validate_ip(self, ip):
+        valid_ip = self.__is_valid_ip(ip)
+        existing_ip = self.recorders.findText(ip, Qt.MatchExactly)
+        self.addRecorderButton.setEnabled(valid_ip and existing_ip == -1)
+
+    def add_recorder(self):
+        self.recorders.addItem(self.recorderIP.text())
+        self.recorderIP.clear()
+
+    def delete_recorder(self):
+        idx = self.recorders.currentIndex()
+        if idx > -1:
+            self.recorders.removeItem(idx)
+            self.deleteRecorderButton.setEnabled(self.recorders.count() > 0)
+
+    @staticmethod
+    def __is_valid_ip(ip):
+        ''' checks if the string is a valid ip:port. '''
+        tokens = ip.split(':')
+        if len(tokens) == 2:
+            ip_tokens = tokens[0].split('.')
+            if len(ip_tokens) == 4:
+                try:
+                    first, *nums = [int(i) for i in ip_tokens]
+                    if 0 < first <= 255:
+                        if all(0 <= i <= 255 for i in nums):
+                            return 0 < int(tokens[1]) < 65536
+                except Exception as e:
+                    pass
+        return False
 
     def __reset(self):
         '''
@@ -245,7 +285,9 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.__preferences.set(CHART_MAG_MAX, self.magMax.value())
         self.__preferences.set(CHART_FREQ_MIN, self.freqMin.value())
         self.__preferences.set(CHART_FREQ_MAX, self.freqMax.value())
-
+        ips = [self.recorders.itemText(i) for i in range(self.recorders.count())]
+        self.__preferences.set(RECORDER_SAVED_IPS, '|'.join(ips))
+        self.__recorder_store.load(ips)
         QDialog.accept(self)
 
     def pick_save_dir(self):

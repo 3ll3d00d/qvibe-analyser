@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>642</width>
-    <height>320</height>
+    <height>430</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -54,7 +54,7 @@
           <enum>QFrame::Sunken</enum>
          </property>
          <property name="text">
-          <string>User Preferences</string>
+          <string>Export</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignCenter</set>
@@ -212,6 +212,63 @@
       </layout>
      </item>
      <item>
+      <layout class="QGridLayout" name="recordersPane">
+       <item row="1" column="2">
+        <widget class="QToolButton" name="addRecorderButton">
+         <property name="text">
+          <string>...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0" colspan="3">
+        <widget class="QLabel" name="analysisLayoutLabel">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::Box</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Sunken</enum>
+         </property>
+         <property name="text">
+          <string>Recorders</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QComboBox" name="recorders"/>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="recorderIP">
+         <property name="inputMask">
+          <string>000.000.000.000:00000</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QToolButton" name="deleteRecorderButton">
+         <property name="text">
+          <string>...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0" rowspan="2">
+        <widget class="QLabel" name="ipAddressLabel">
+         <property name="text">
+          <string>IP Address</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
       <layout class="QGridLayout" name="systemPane">
        <item row="1" column="0">
         <widget class="QCheckBox" name="checkForUpdates">
@@ -268,6 +325,23 @@
    </item>
   </layout>
  </widget>
+ <tabstops>
+  <tabstop>wavSaveDir</tabstop>
+  <tabstop>wavSaveDirPicker</tabstop>
+  <tabstop>xScale</tabstop>
+  <tabstop>yScale</tabstop>
+  <tabstop>zScale</tabstop>
+  <tabstop>magMin</tabstop>
+  <tabstop>magMax</tabstop>
+  <tabstop>freqMin</tabstop>
+  <tabstop>freqMax</tabstop>
+  <tabstop>recorderIP</tabstop>
+  <tabstop>addRecorderButton</tabstop>
+  <tabstop>recorders</tabstop>
+  <tabstop>deleteRecorderButton</tabstop>
+  <tabstop>checkForUpdates</tabstop>
+  <tabstop>checkForBetaUpdates</tabstop>
+ </tabstops>
  <resources/>
  <connections>
   <connection>
@@ -277,8 +351,8 @@
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>282</x>
-     <y>237</y>
+     <x>288</x>
+     <y>423</y>
     </hint>
     <hint type="destinationlabel">
      <x>157</x>
@@ -293,8 +367,8 @@
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>350</x>
-     <y>237</y>
+     <x>356</x>
+     <y>423</y>
     </hint>
     <hint type="destinationlabel">
      <x>286</x>
@@ -318,8 +392,59 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>recorderIP</sender>
+   <signal>textChanged(QString)</signal>
+   <receiver>preferencesDialog</receiver>
+   <slot>validate_ip()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>111</x>
+     <y>269</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>31</x>
+     <y>269</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>addRecorderButton</sender>
+   <signal>clicked()</signal>
+   <receiver>preferencesDialog</receiver>
+   <slot>add_recorder()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>620</x>
+     <y>271</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>633</x>
+     <y>256</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>deleteRecorderButton</sender>
+   <signal>clicked()</signal>
+   <receiver>preferencesDialog</receiver>
+   <slot>delete_recorder()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>619</x>
+     <y>313</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>637</x>
+     <y>347</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>pick_save_dir()</slot>
+  <slot>validate_ip()</slot>
+  <slot>add_recorder()</slot>
+  <slot>delete_recorder()</slot>
  </slots>
 </ui>

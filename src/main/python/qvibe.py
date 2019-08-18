@@ -65,8 +65,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                                               self.__version))
         # UI initialisation
         self.setupUi(self)
-        self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
-        self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
         # run a twisted reactor as its responsiveness is embarrassingly better than QTcpSocket
         from twisted.internet import reactor
         self.__reactor = reactor
@@ -86,9 +84,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                               self.__reactor)
         self.__recorder_store.signals.on_status_change.connect(self.__handle_recorder_connect_event)
         saved_recorders = self.preferences.get(RECORDER_SAVED_IPS)
-        if saved_recorders is None:
-            self.__recorder_store.append()
-        else:
+        if saved_recorders is not None:
             self.__recorder_store.load(saved_recorders.split('|'))
         target_resolution = f"{self.preferences.get(ANALYSIS_RESOLUTION)} Hz"
         self.resolutionHz.setCurrentText(target_resolution)
@@ -134,7 +130,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
 
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
-        self.saveRecordersButton.setIcon(qta.icon('fa5s.save'))
         self.visibleCurves.selectAll()
 
     def reset_recording(self):
@@ -251,13 +246,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.preferences.set(RECORDER_TARGET_GYRO_SENS, self.__target_config.gyro_sens)
         self.__recorder_store.target_config = self.__target_config
 
-    def add_new_recorder(self):
-        self.__recorder_store.append()
-
-    def save_recorders(self):
-        ''' Saves the specified recorders to preferences. '''
-        self.preferences.set(RECORDER_SAVED_IPS, '|'.join([r.ip_address for r in self.__recorder_store]))
-
     def set_buffer_size(self, val):
         self.preferences.set(BUFFER_SIZE, val)
 
@@ -361,7 +349,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         Shows the preferences dialog.
         '''
-        PreferencesDialog(self.preferences, self.__style_path_root, parent=self).exec()
+        PreferencesDialog(self.preferences, self.__style_path_root, self.__recorder_store, parent=self).exec()
 
     def show_about(self):
         msg_box = QMessageBox()

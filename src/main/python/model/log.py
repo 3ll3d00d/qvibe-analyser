@@ -108,7 +108,7 @@ class RollingLogger(logging.Handler):
         Creates a new log viewer window.
         '''
         if self.__window is None:
-            self.__window = LogViewer(len(self.__buffer))
+            self.__window = LogViewer(self.__buffer.maxlen)
             self.__window.set_size.connect(self.set_size)
             self.__window.change_level.connect(self.change_level)
             self.__window.set_exclude_filter.connect(self.set_excludes)

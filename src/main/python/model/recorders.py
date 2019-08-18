@@ -5,6 +5,7 @@ from collections import Sequence
 
 import numpy as np
 import qtawesome as qta
+from qtpy.QtWidgets import QMessageBox
 from qtpy import QtWidgets, QtCore
 from qtpy.QtCore import QObject, Signal, QThreadPool
 from twisted.internet.protocol import connectionDone
@@ -32,6 +33,7 @@ class Recorder:
         self.__buffer_size = buffer_size
         self.__snap_idx = 0
         self.__buffer = self.__make_new_buffer()
+        self.__parent_layout = parent_layout
         # init the widgets on screen which control it
         self.__recorder_layout = QtWidgets.QGridLayout()
         self.__recorder_layout.setObjectName(f"recorders_layout_{idx}")
@@ -65,7 +67,7 @@ class Recorder:
         self.__recording.setEnabled(False)
         self.__state_layout.addWidget(self.__recording)
         self.__recorder_layout.addLayout(self.__state_layout, 1, 0, 1, 2)
-        parent_layout.addLayout(self.__recorder_layout)
+        self.__parent_layout.addLayout(self.__recorder_layout)
         self.__connect_button.setIcon(qta.icon('fa5s.sign-in-alt'))
         self.__disconnect_button.setIcon(qta.icon('fa5s.sign-out-alt'))
 
@@ -171,11 +173,17 @@ class Recorder:
         Reacts to connection state changes to determine if we are connected or not
         propagates that status via a signal
         '''
-        if new_state is True:
+        if new_state == 1:
             self.connected = True
         else:
             self.connected = False
             self.recording = False
+            if new_state != 0:
+                msg_box = QMessageBox()
+                msg_box.setText(f"Failed to connect to: \n\n {self.ip_address}")
+                msg_box.setIcon(QMessageBox.Critical)
+                msg_box.setWindowTitle('Connection Failed')
+                msg_box.exec()
 
     def __handle_data(self, data):
         '''
@@ -230,6 +238,12 @@ class Recorder:
     def reset(self):
         self.__buffer = self.__make_new_buffer()
 
+    def destroy(self):
+        logger.info(f"Destroying {self.ip_address}")
+        self.disconnect()
+        self.signals.disconnect()
+        self.__parent_layout.removeItem(self.__recorder_layout)
+
 
 class RecorderStore(Sequence):
     '''
@@ -272,7 +286,14 @@ class RecorderStore(Sequence):
     def load(self, ip_addresses):
         ''' Creates recorders for all given IP addresses. '''
         for ip in ip_addresses:
-            self.append().ip_address = ip
+            if next((r for r in self if r.ip_address == ip), None) is None:
+                logger.info(f"Loading new recorder at {ip}")
+                self.append().ip_address = ip
+        to_remove = [r for r in self if r.ip_address not in ip_addresses]
+        for r in to_remove:
+            logger.info(f"Discarding recorder from {r.ip_address}")
+            self.__recorders.remove(r)
+            r.destroy()
 
     def __getitem__(self, i):
         return self.__recorders[i]
@@ -414,7 +435,7 @@ class RecorderConfig:
 
 
 class RecorderSocketBridgeSignals(QObject):
-    on_socket_state_change = Signal(bool)
+    on_socket_state_change = Signal(int)
     on_data = Signal(str)
     send_target = Signal(RecorderConfig)
 
@@ -449,6 +470,15 @@ class RecorderTwistedBridge:
         self.__endpoint = TCP4ClientEndpoint(self.__reactor, ip, int(port))
         self.__protocol = RecorderProtocol(self.signals.on_data, self.__on_state_change)
         self.__connect = connectProtocol(self.__endpoint, self.__protocol)
+        self.__reactor.callLater(1, self.__cancel_if_not_connected)
+
+    def __cancel_if_not_connected(self):
+        if self.__state != 1:
+            logger.info(f"Cancelling connection to {self.ip} on timeout")
+            self.__connect.cancel()
+            self.__on_state_change(2)
+            self.kill()
+            self.__on_state_change(0)
 
     def __on_state_change(self, new_state):
         ''' socket connection state change handler '''
@@ -491,11 +521,11 @@ class RecorderProtocol(LineReceiver):
     def connectionMade(self):
         logger.info("Connection established, sending state change")
         self.transport.setTcpNoDelay(True)
-        self.__on_state_change(True)
+        self.__on_state_change(1)
 
     def connectionLost(self, reason=connectionDone):
         logger.info(f"Connection lost because {reason}, sending state change")
-        self.__on_state_change(False)
+        self.__on_state_change(0)
 
     def lineReceived(self, line):
         logger.debug("Emitting DAT")
