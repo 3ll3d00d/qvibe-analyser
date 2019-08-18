@@ -151,6 +151,7 @@ class Spectrogram(VisibleChart):
         self.__series = {}
         self.__buffers = {}
         self.__recorders = []
+        self.__change_row_viz()
 
     def __get_meta(self):
         rnd = np.random.default_rng().random(size=self.fs * self.__buffer_size)

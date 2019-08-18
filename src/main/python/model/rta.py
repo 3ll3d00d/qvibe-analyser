@@ -128,3 +128,6 @@ class RTA(VisibleChart):
             elif sig.name in self.__series:
                 self.__chart.removeItem(self.__series[sig.name])
                 del self.__series[sig.name]
+        elif sig.name in self.__series:
+            self.__chart.removeItem(self.__series[sig.name])
+            del self.__series[sig.name]
