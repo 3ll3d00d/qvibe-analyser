@@ -1,0 +1,1 @@
+Icon uses a 256x256px version of ['Water under 11 Hz vibration'](https://commons.wikimedia.org/wiki/File:Water_under_11_Hz_vibration.jpg) by Jordi Torrents under [Creative Commons Attribution-Share Alike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/deed.en)
