@@ -295,6 +295,10 @@ class RecorderStore(Sequence):
             self.__recorders.remove(r)
             r.destroy()
 
+    def clear(self):
+        ''' eliminates all recorders '''
+        self.load([])
+
     def __getitem__(self, i):
         return self.__recorders[i]
 

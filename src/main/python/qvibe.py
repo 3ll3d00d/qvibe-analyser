@@ -85,8 +85,11 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                               self.__reactor)
         self.__recorder_store.signals.on_status_change.connect(self.__handle_recorder_connect_event)
         saved_recorders = self.preferences.get(RECORDER_SAVED_IPS)
+        warn_on_no_recorders = False
         if saved_recorders is not None:
             self.__recorder_store.load(saved_recorders.split('|'))
+        else:
+            warn_on_no_recorders = True
         target_resolution = f"{self.preferences.get(ANALYSIS_RESOLUTION)} Hz"
         self.resolutionHz.setCurrentText(target_resolution)
         # menus
@@ -132,6 +135,15 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
         self.visibleCurves.selectAll()
+        # show preferences if we have no IPs
+        if warn_on_no_recorders is True:
+            result = QMessageBox.question(self,
+                                          'No Recorders',
+                                          f"No qvibe-recorders have been added. \n\nUse the preferences screen to add then.\n\nWould you like to add one now?",
+                                          QMessageBox.Yes | QMessageBox.No,
+                                          QMessageBox.No)
+            if result == QMessageBox.Yes:
+                self.show_preferences()
 
     def reset_recording(self):
         self.__recorder_store.reset()

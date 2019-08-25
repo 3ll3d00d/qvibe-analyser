@@ -200,10 +200,15 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.wavSaveDirPicker.setIcon(qta.icon('fa5s.folder-open'))
         self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
         self.deleteRecorderButton.setIcon(qta.icon('fa5s.times'))
-        ips = self.__preferences.get(RECORDER_SAVED_IPS).split('|')
-        for ip in ips:
-            self.recorders.addItem(ip)
-        self.deleteRecorderButton.setEnabled(len(ips) > 0)
+        enable_delete = False
+        if self.__preferences.get(RECORDER_SAVED_IPS) is not None:
+            ips = self.__preferences.get(RECORDER_SAVED_IPS).split('|')
+            for ip in ips:
+                self.recorders.addItem(ip)
+                enable_delete = True
+        else:
+            self.recorderIP.setFocus(Qt.OtherFocusReason)
+        self.deleteRecorderButton.setEnabled(enable_delete)
         self.addRecorderButton.setEnabled(False)
 
     def __balance_mag(self, val):
@@ -285,9 +290,13 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.__preferences.set(CHART_MAG_MAX, self.magMax.value())
         self.__preferences.set(CHART_FREQ_MIN, self.freqMin.value())
         self.__preferences.set(CHART_FREQ_MAX, self.freqMax.value())
-        ips = [self.recorders.itemText(i) for i in range(self.recorders.count())]
-        self.__preferences.set(RECORDER_SAVED_IPS, '|'.join(ips))
-        self.__recorder_store.load(ips)
+        if self.recorders.count() > 0:
+            ips = [self.recorders.itemText(i) for i in range(self.recorders.count())]
+            self.__preferences.set(RECORDER_SAVED_IPS, '|'.join(ips))
+            self.__recorder_store.load(ips)
+        else:
+            self.__preferences.clear(RECORDER_SAVED_IPS)
+            self.__recorder_store.clear()
         QDialog.accept(self)
 
     def pick_save_dir(self):
