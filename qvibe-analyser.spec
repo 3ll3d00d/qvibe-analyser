@@ -115,12 +115,33 @@ def get_exe_name():
     return 'qvibe-analyser'
 
 
+def get_binaries():
+    '''
+    :return: the ssl binaries if we're on windows and they exist.
+    '''
+    if platform.system() == 'Windows':
+        import os
+        ssl_dll = 'c:/Windows/System32/libssl-1_1-x64.dll'
+        crypto_dll = 'c:/Windows/System32/libcrypto-1_1-x64.dll'
+        if os.path.isfile(ssl_dll):
+            if os.path.isfile(crypto_dll):
+                return [
+                    (ssl_dll, '.'),
+                    (crypto_dll, '.'),
+                ]
+            else:
+                print(f"MISSING libcrypto-1_1-x64.dll")
+        else:
+            print(f"MISSING libssl-1_1-x64.dll")
+    return None
+
+
 block_cipher = None
 spec_root = os.path.abspath(SPECPATH)
 
 a = Analysis(['src/main/python/qvibe.py'],
              pathex=[spec_root],
-             binaries=None,
+             binaries=get_binaries(),
              datas=get_data_args(),
              hiddenimports=['numpy.random'],
              hookspath=['hooks/'],
