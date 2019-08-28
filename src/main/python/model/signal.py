@@ -22,28 +22,25 @@ logger = logging.getLogger('qvibe.signal')
 
 class TriAxisSignal:
 
-    def __init__(self, preferences, recorder_name, data, fs, resolution_shift, smooth, idx=-1, mode='vibration',
+    def __init__(self, preferences, recorder_name, data, fs, resolution_shift, idx=-1, mode='vibration',
                  pre_calc=False, view_mode='avg'):
-        self.__has_data = pre_calc
         self.__raw = data
         self.__mode = mode
         self.__view = view_mode
         self.__idx = idx
         self.__recorder_name = recorder_name
-        self.__x = Signal(f"{recorder_name}:x", preferences, smooth, data[:, 2], fs, resolution_shift, idx=idx,
+        self.__x = Signal(f"{recorder_name}:x", preferences, data[:, 2], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__y = Signal(f"{recorder_name}:y", preferences, smooth, data[:, 3], fs, resolution_shift, idx=idx,
+        self.__y = Signal(f"{recorder_name}:y", preferences, data[:, 3], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__z = Signal(f"{recorder_name}:z", preferences, smooth, data[:, 4], fs, resolution_shift, idx=idx,
+        self.__z = Signal(f"{recorder_name}:z", preferences, data[:, 4], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__sum = SummedSignal(f"{recorder_name}:sum", preferences, self.__x, self.__y, self.__z, smooth, idx=idx,
+        self.__sum = SummedSignal(f"{recorder_name}:sum", preferences, self.__x, self.__y, self.__z, idx=idx,
                                   pre_calc=pre_calc, view_mode=view_mode)
 
-    def set_smooth(self, smooth, recalc=True):
-        self.__x.set_smooth(smooth, recalc=recalc)
-        self.__y.set_smooth(smooth, recalc=recalc)
-        self.__z.set_smooth(smooth, recalc=recalc)
-        self.__sum.set_smooth(smooth, recalc=recalc)
+    @property
+    def view(self):
+        return self.__view
 
     def set_view(self, view, recalc=True):
         self.__view = view
@@ -58,8 +55,8 @@ class TriAxisSignal:
         self.__y.set_mode(mode, recalc=recalc)
         self.__z.set_mode(mode, recalc=recalc)
 
-    def has_data(self):
-        return self.__has_data
+    def has_data(self, view):
+        return self.__x.has_data(view) and self.__y.has_data(view) and self.__z.has_data(view)
 
     @property
     def recorder_name(self):
@@ -90,7 +87,6 @@ class TriAxisSignal:
         return self.__idx
 
     def recalc(self):
-        self.__has_data = True
         self.x.recalc()
         self.y.recalc()
         self.z.recalc()
@@ -106,12 +102,10 @@ class SpectroValues:
 
 
 class Analysis:
-    def __init__(self, values, smooth=False):
+    def __init__(self, values):
         self.__x = values[0]
         self.__y_raw = values[1]
         self.__y = values[2]
-        if smooth is True:
-            self.__y = smooth_savgol(self.__x, self.__y)[1]
 
     @property
     def x(self):
@@ -127,12 +121,11 @@ class Analysis:
 
 
 class AnalysableSignal:
-    def __init__(self, name, preferences, smooth, idx=-1, view_mode='avg'):
+    def __init__(self, name, preferences, idx=-1, view_mode='avg'):
         self.__name = name
         self.__preferences = preferences
         self.__view_mode = view_mode
         self.__idx = idx
-        self.__smooth = smooth
         self.__output = {}
 
     @property
@@ -142,10 +135,6 @@ class AnalysableSignal:
     @property
     def idx(self):
         return self.__idx
-
-    @property
-    def smooth(self):
-        return self.__smooth
 
     @abc.abstractmethod
     def recalc(self):
@@ -159,8 +148,8 @@ class AnalysableSignal:
     def prefs(self):
         return self.__preferences
 
-    def has_data(self):
-        return self.__view_mode in self.__output
+    def has_data(self, view):
+        return view in self.__output
 
     def set_view(self, view, recalc=True):
         '''
@@ -179,9 +168,10 @@ class AnalysableSignal:
         '''
         if view_name is None:
             view_name = self.__view_mode
-        if view_name in self.__output:
-            return self.__output[view_name]
-        return None
+        if view_name not in self.__output:
+            self.recalc()
+        val = self.__output.get(view_name, None)
+        return val
 
     def set_analysis(self, analysis):
         '''
@@ -190,17 +180,11 @@ class AnalysableSignal:
         '''
         self.__output[self.__view_mode] = analysis
 
-    def set_smooth(self, smooth, recalc=True):
-        ''' Changes the smooth state. '''
-        self.__smooth = smooth
-        if recalc is True:
-            self.recalc()
-
 
 class SummedSignal(AnalysableSignal):
 
-    def __init__(self, name, preferences, x, y, z, smooth, idx=-1, pre_calc=False, view_mode='avg'):
-        super().__init__(name, preferences, smooth, idx=idx, view_mode=view_mode)
+    def __init__(self, name, preferences, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
+        super().__init__(name, preferences, idx=idx, view_mode=view_mode)
         self.__x = x
         self.__y = y
         self.__z = z
@@ -223,7 +207,7 @@ class SummedSignal(AnalysableSignal):
                 if self.view_mode == 'avg':
                     Psum = np.sqrt(Psum)
                 Psum_db = amplitude_to_db(Psum, ref=ADJUST_BY_3DB * REF_ACCELERATION_IN_G)
-                self.set_analysis(Analysis((x.x, Psum, Psum_db), smooth=self.smooth))
+                self.set_analysis(Analysis((x.x, Psum, Psum_db)))
 
     def __can_sum(self):
         return self.view_mode == 'avg' or self.view_mode == 'peak'
@@ -235,7 +219,7 @@ def scale_sq(data, scale):
 
 class Signal(AnalysableSignal):
 
-    def __init__(self, name, preferences, smooth, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
+    def __init__(self, name, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
                  view_mode='avg'):
         '''
         Creates a new signal.
@@ -246,7 +230,7 @@ class Signal(AnalysableSignal):
         :param mode: optional analysis mode, can be none (raw data), vibration or tilt.
         :param pre_calc: if True, calculate the required views.
         '''
-        super().__init__(name, preferences, smooth, idx=idx, view_mode=view_mode)
+        super().__init__(name, preferences, idx=idx, view_mode=view_mode)
         self.__raw_data = data
         self.__data = None
         self.__fs = fs
@@ -295,18 +279,15 @@ class Signal(AnalysableSignal):
         if self.view_mode == 'avg':
             from model.preferences import ANALYSIS_AVG_WINDOW
             avg_wnd = get_window(self.prefs, ANALYSIS_AVG_WINDOW)
-            return Analysis(self.__avg_spectrum(resolution_shift=self.__resolution_shift, window=avg_wnd),
-                            smooth=self.smooth)
+            return Analysis(self.__avg_spectrum(resolution_shift=self.__resolution_shift, window=avg_wnd))
         elif self.view_mode == 'peak':
             from model.preferences import ANALYSIS_PEAK_WINDOW
             peak_wnd = get_window(self.prefs, ANALYSIS_PEAK_WINDOW)
-            return Analysis(self.__peak_spectrum(resolution_shift=self.__resolution_shift, window=peak_wnd),
-                            smooth=self.smooth)
+            return Analysis(self.__peak_spectrum(resolution_shift=self.__resolution_shift, window=peak_wnd))
         elif self.view_mode == 'psd':
             from model.preferences import ANALYSIS_AVG_WINDOW
             avg_wnd = get_window(self.prefs, ANALYSIS_AVG_WINDOW)
-            return Analysis(self.__psd(resolution_shift=self.__resolution_shift, window=avg_wnd),
-                            smooth=self.smooth)
+            return Analysis(self.__psd(resolution_shift=self.__resolution_shift, window=avg_wnd))
         elif self.view_mode == 'spectrogram':
             return SpectroValues(*self.__spectrogram(resolution_shift=self.__resolution_shift))
 

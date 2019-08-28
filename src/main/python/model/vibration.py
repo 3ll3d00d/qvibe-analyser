@@ -28,8 +28,8 @@ class Vibration(VisibleChart):
     def __on_analysis_mode_change(self, analysis_mode):
         logger.info(f"Changing analysis mode from {self.analysis_mode} to {analysis_mode}")
         self.analysis_mode = analysis_mode
-        for name in self.cached.keys():
-            self.cached[name].set_mode(self.analysis_mode, recalc=False)
+        for name in self.cached_recorder_names():
+            self.cached_data(name).set_mode(self.analysis_mode, recalc=False)
             self.update_chart(name)
 
     def __on_buffer_size_change(self, size):
@@ -53,7 +53,7 @@ class Vibration(VisibleChart):
         '''
         updates the chart with the latest signal.
         '''
-        d = self.cached.get(recorder_name, None)
+        d = self.cached_data(recorder_name)
         if d is not None:
             t = (d.time - np.min(d.time))/500
             self.create_or_update(d.x, t, 'r')

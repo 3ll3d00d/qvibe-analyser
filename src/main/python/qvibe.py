@@ -25,7 +25,7 @@ from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
 from common import block_signals, ReactorRunner
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
-    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX
+    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX, SNAPSHOT_x
 from model.checker import VersionChecker, ReleaseNotesDialog
 from model.log import RollingLogger
 from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
@@ -73,6 +73,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
         QThreadPool.globalInstance().reserveThread()
         QThreadPool.globalInstance().start(runner)
         self.app.aboutToQuit.connect(runner.stop)
+        # snapshot loaders
+        snapshot_buttons = [self.snap1, self.snap2, self.snap3]
         # core domain stores
         self.__timer = None
         self.__start_time = None
@@ -124,7 +126,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
-                   self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax),
+                   self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
+                   snapshot_buttons, self.snapButton, self.snapSlotSelector, self.peakHold, self.peakSecs),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.activeRecorders, self.visibleCurves),
@@ -144,6 +147,9 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                           QMessageBox.No)
             if result == QMessageBox.Yes:
                 self.show_preferences()
+        # check whether we have snaps
+        for i in range(0, 3):
+            snapshot_buttons[i].setEnabled(self.preferences.has(SNAPSHOT_x % i))
 
     def reset_recording(self):
         self.__recorder_store.reset()

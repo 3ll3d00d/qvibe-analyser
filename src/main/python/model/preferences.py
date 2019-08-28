@@ -47,6 +47,7 @@ SUM_Z_SCALE = 'sum/z_scale'
 
 WAV_DOWNLOAD_DIR = 'wav/download_dir'
 
+SNAPSHOT_x = 'snapshot/save_%d'
 
 DEFAULT_PREFS = {
     ANALYSIS_RESOLUTION: 1.0,

@@ -26,7 +26,6 @@ class SpectrogramEvent(ChartEvent):
                              chunk,
                              self.chart.fs,
                              self.chart.resolution_shift,
-                             False,
                              idx=self.idx,
                              mode='vibration',
                              view_mode='spectrogram',
@@ -155,7 +154,7 @@ class Spectrogram(VisibleChart):
 
     def __get_meta(self):
         rnd = np.random.default_rng().random(size=self.fs * self.__buffer_size)
-        s = Signal('test', self.preferences, False, rnd, self.fs, self.resolution_shift, pre_calc=True,
+        s = Signal('test', self.preferences, rnd, self.fs, self.resolution_shift, pre_calc=True,
                    view_mode='spectrogram')
         return s.get_analysis()
 
@@ -179,7 +178,7 @@ class Spectrogram(VisibleChart):
         buf = np.roll(buf, c_idx, 0)
         for idx, c in enumerate(chunks):
             dat = getattr(c, axis)
-            if dat.has_data() is False:
+            if dat.has_data('spectrogram') is False:
                 dat.recalc()
             sxx = dat.get_analysis().sxx
             buf[c_idx-idx-1] = sxx.T

@@ -4,6 +4,7 @@ import math
 import time
 from queue import Queue, Empty
 
+from collections import deque
 from qtpy.QtCore import QObject, Signal, QThread, QTimer
 
 from model.log import to_millis
@@ -68,8 +69,7 @@ class ChartProcessor(QThread):
 
 class ChartEvent:
     ''' Allows preprocessing of fresh data for a chart to occur away from the main thread. '''
-    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, analysis_mode='vibration',
-                 smooth=False):
+    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, analysis_mode='vibration'):
         super().__init__()
         self.chart = chart
         self.recorder_name = recorder_name
@@ -78,7 +78,6 @@ class ChartEvent:
         self.preferences = preferences
         self.__analysis_mode = analysis_mode
         self.__budget_millis = budget_millis * 0.9
-        self.__smooth = smooth
         self.should_emit = False
         self.output = None
 
@@ -104,7 +103,6 @@ class ChartEvent:
                                     self.input,
                                     self.chart.fs,
                                     self.chart.resolution_shift,
-                                    self.__smooth,
                                     idx=self.idx,
                                     mode=self.__analysis_mode,
                                     pre_calc=False)
@@ -121,7 +119,7 @@ class ChartSignals(QObject):
 class VisibleChart:
 
     def __init__(self, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, visible, coelesce=False,
-                 analysis_mode='vibration'):
+                 analysis_mode='vibration', cache_size=1, cache_purger=lambda c: None):
         self.signals = ChartSignals()
         self.processor = ChartProcessor(coelesce=coelesce)
         self.signals.new_data.connect(self.do_update)
@@ -137,6 +135,8 @@ class VisibleChart:
         self.__budget_millis = None
         self.__min_nperseg = 0
         self.__ticks = 0
+        self.__cache_size = cache_size
+        self.__cache_purger = cache_purger
         self.__cached = {}
         self.__received_data_while_invisible = set()
         self.__visible_series = []
@@ -151,13 +151,14 @@ class VisibleChart:
     def set_visible_series(self, series):
         ''' changes the visible series. '''
         self.__visible_series = series
-        for k in self.cached.keys():
+        for k in self.cached_recorder_names():
             self.update_chart(k)
 
     def set_actual_fps(self):
         ''' pushes the tick count to the actual fps widget. '''
-        active = len(self.cached.keys())
-        val = int(self.__ticks / len(self.cached.keys())) if active > 0 else 0
+        recorders = self.cached_recorder_names()
+        active = len(recorders)
+        val = int(self.__ticks / len(recorders)) if active > 0 else 0
         self.__actual_fps_widget.setValue(val)
         self.__ticks = 0
 
@@ -219,9 +220,30 @@ class VisibleChart:
         else:
             self.__timer.stop()
 
-    @property
-    def cached(self):
-        return self.__cached
+    def for_each_recorder(self, func):
+        ''' passes each recorder cache to the supplied function. '''
+        for name in self.cached_recorder_names():
+            func(name)
+
+    def for_each_cache(self, func):
+        ''' passes each cache to the supplied function. '''
+        for name in self.cached_recorder_names():
+            func(self.__cached[name])
+
+    def cached_recorder_names(self):
+        return list(self.__cached.keys())
+
+    def cached_data(self, recorder_name):
+        '''
+        Gets the cached data for the given recorder name.
+        :param recorder_name: the name.
+        :return: the latest data (can be a single entry or a sequence) or None if this recorder has no data.
+        '''
+        if recorder_name in self.__cached:
+            cached = self.__cached[recorder_name]
+            return cached[-1] if self.__cache_size == 1 else cached
+        else:
+            return None
 
     def do_update(self, recorder_name, idx, data):
         '''
@@ -245,7 +267,11 @@ class VisibleChart:
         Accepts the fresh data into the cache for the chart.
         :param data: the data.
         '''
-        self.__cached[data.recorder_name] = data
+        if data.recorder_name not in self.__cached:
+            self.__cached[data.recorder_name] = deque(maxlen=self.__cache_size) if self.__cache_size > 0 else deque()
+        cache = self.__cached[data.recorder_name]
+        cache.append(data)
+        self.__cache_purger(cache)
         return data
 
     @abc.abstractmethod
