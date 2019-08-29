@@ -74,7 +74,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         QThreadPool.globalInstance().start(runner)
         self.app.aboutToQuit.connect(runner.stop)
         # snapshot loaders
-        snapshot_buttons = [self.snap1, self.snap2, self.snap3]
+        self.__snapshot_buttons = [self.snap1, self.snap2, self.snap3]
         # core domain stores
         self.__timer = None
         self.__start_time = None
@@ -127,7 +127,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
-                   snapshot_buttons, self.snapButton, self.snapSlotSelector, self.peakHold, self.peakSecs),
+                   self.__snapshot_buttons, self.snapButton, self.deleteSnapButton, self.snapSlotSelector,
+                   self.peakHold, self.peakSecs),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.activeRecorders, self.visibleCurves),
@@ -149,7 +150,9 @@ class QVibe(QMainWindow, Ui_MainWindow):
                 self.show_preferences()
         # check whether we have snaps
         for i in range(0, 3):
-            snapshot_buttons[i].setEnabled(self.preferences.has(SNAPSHOT_x % i))
+            self.__snapshot_buttons[i].setEnabled(self.preferences.has(SNAPSHOT_x % i))
+        self.snapButton.setIcon(qta.icon('fa5s.save'))
+        self.deleteSnapButton.setIcon(qta.icon('fa5s.times'))
 
     def reset_recording(self):
         self.__recorder_store.reset()
@@ -273,16 +276,18 @@ class QVibe(QMainWindow, Ui_MainWindow):
             c.visible = (idx == c_idx)
 
     def set_visible_curves(self):
-        self.__update_plot_visibility()
+        '''
+        Propagates the visible axes to the charts.
+        '''
+        for c in self.__analysers.values():
+            c.set_visible_axes([c.text() for c in self.visibleCurves.selectedItems()])
 
     def set_visible_recorders(self):
-        self.__update_plot_visibility()
-
-    def __update_plot_visibility(self):
-        series = [f"{n.text()}:{c.text()}" for n in self.activeRecorders.selectedItems() for c in self.visibleCurves.selectedItems()]
-        logger.info(f"Setting visible series [{series}]")
+        '''
+        Propagates the visible recorders to the charts.
+        '''
         for c in self.__analysers.values():
-            c.set_visible_series(series)
+            c.set_visible_recorders([c.text() for c in self.activeRecorders.selectedItems()])
 
     def export_chart(self):
         '''

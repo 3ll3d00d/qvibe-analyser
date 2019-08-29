@@ -154,7 +154,7 @@ class Spectrogram(VisibleChart):
 
     def __get_meta(self):
         rnd = np.random.default_rng().random(size=self.fs * self.__buffer_size)
-        s = Signal('test', self.preferences, rnd, self.fs, self.resolution_shift, pre_calc=True,
+        s = Signal('test', 'test',  self.preferences, rnd, self.fs, self.resolution_shift, pre_calc=True,
                    view_mode='spectrogram')
         return s.get_analysis()
 

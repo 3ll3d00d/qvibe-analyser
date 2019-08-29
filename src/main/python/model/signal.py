@@ -29,14 +29,41 @@ class TriAxisSignal:
         self.__view = view_mode
         self.__idx = idx
         self.__recorder_name = recorder_name
-        self.__x = Signal(f"{recorder_name}:x", preferences, data[:, 2], fs, resolution_shift, idx=idx,
+        self.__fs = fs
+        self.__x = Signal(recorder_name, 'x', preferences, data[:, 2], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__y = Signal(f"{recorder_name}:y", preferences, data[:, 3], fs, resolution_shift, idx=idx,
+        self.__y = Signal(recorder_name, 'y', preferences, data[:, 3], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__z = Signal(f"{recorder_name}:z", preferences, data[:, 4], fs, resolution_shift, idx=idx,
+        self.__z = Signal(recorder_name, 'z', preferences, data[:, 4], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__sum = SummedSignal(f"{recorder_name}:sum", preferences, self.__x, self.__y, self.__z, idx=idx,
+        self.__sum = SummedSignal(recorder_name, 'sum', preferences, self.__x, self.__y, self.__z, idx=idx,
                                   pre_calc=pre_calc, view_mode=view_mode)
+
+    @staticmethod
+    def decode(prefs, shift, str_format, mode, view):
+        '''
+        Decodes a signal encoded via encode
+        :param prefs: the preferences.
+        :param shift: the resolution shift.
+        :param str_format: the raw data in str form.
+        :param mode: the active mode
+        :param view: the active view.
+        :return: a TriAxisSignal
+        '''
+        name, idx, dtype, fs, dat = str_format.split('#', maxsplit=5)
+        import io
+        raw = np.loadtxt(io.StringIO(dat), dtype=dtype, ndmin=2)
+        return TriAxisSignal(prefs, name, raw, int(fs), shift, idx=int(idx), mode=mode, view_mode=view, pre_calc=True)
+
+    def encode(self):
+        '''
+        encodes the minimal data required to persist this signal
+        :return: the signal encoded as a string.
+        '''
+        import io
+        out = io.StringIO()
+        np.savetxt(out, self.__raw)
+        return f"{self.recorder_name}#{self.__idx}#{self.__raw.dtype}#{self.__fs}#{out.getvalue()}"
 
     @property
     def view(self):
@@ -121,16 +148,21 @@ class Analysis:
 
 
 class AnalysableSignal:
-    def __init__(self, name, preferences, idx=-1, view_mode='avg'):
-        self.__name = name
+    def __init__(self, recorder_name, axis, preferences, idx=-1, view_mode='avg'):
+        self.__recorder_name = recorder_name
+        self.__axis = axis
         self.__preferences = preferences
         self.__view_mode = view_mode
         self.__idx = idx
         self.__output = {}
 
     @property
-    def name(self):
-        return self.__name
+    def recorder_name(self):
+        return self.__recorder_name
+
+    @property
+    def axis(self):
+        return self.__axis
 
     @property
     def idx(self):
@@ -183,8 +215,8 @@ class AnalysableSignal:
 
 class SummedSignal(AnalysableSignal):
 
-    def __init__(self, name, preferences, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
-        super().__init__(name, preferences, idx=idx, view_mode=view_mode)
+    def __init__(self, recorder_name, axis, preferences, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
+        super().__init__(recorder_name, axis, preferences, idx=idx, view_mode=view_mode)
         self.__x = x
         self.__y = y
         self.__z = z
@@ -219,7 +251,7 @@ def scale_sq(data, scale):
 
 class Signal(AnalysableSignal):
 
-    def __init__(self, name, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
+    def __init__(self, recorder_name, axis, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
                  view_mode='avg'):
         '''
         Creates a new signal.
@@ -230,7 +262,7 @@ class Signal(AnalysableSignal):
         :param mode: optional analysis mode, can be none (raw data), vibration or tilt.
         :param pre_calc: if True, calculate the required views.
         '''
-        super().__init__(name, preferences, idx=idx, view_mode=view_mode)
+        super().__init__(recorder_name, axis, preferences, idx=idx, view_mode=view_mode)
         self.__raw_data = data
         self.__data = None
         self.__fs = fs
@@ -269,7 +301,7 @@ class Signal(AnalysableSignal):
         start = time.time()
         self.set_analysis(self.__calculate())
         end = time.time()
-        logger.debug(f"Recalc {self.name}:{self.idx} in {to_millis(start, end)}ms")
+        logger.debug(f"Recalc {self.recorder_name}:{self.axis}:{self.idx} in {to_millis(start, end)}ms")
 
     @property
     def fs(self):

@@ -139,7 +139,8 @@ class VisibleChart:
         self.__cache_purger = cache_purger
         self.__cached = {}
         self.__received_data_while_invisible = set()
-        self.__visible_series = []
+        self.__visible_axes = []
+        self.__visible_recorders = []
         self.__on_resolution_change(resolution_widget.currentText())
         self.__on_fs_change(fs_widget.value())
         # link to widgets
@@ -148,11 +149,25 @@ class VisibleChart:
         self.__on_fps_change(fps_widget.value())
         fps_widget.valueChanged['int'].connect(self.__on_fps_change)
 
-    def set_visible_series(self, series):
-        ''' changes the visible series. '''
-        self.__visible_series = series
-        for k in self.cached_recorder_names():
-            self.update_chart(k)
+    def set_visible_axes(self, axes):
+        '''
+        Updates the visible axes.
+        :param axes: the axes.
+        '''
+        self.__visible_axes = axes
+        self.update_all_plots()
+
+    def update_all_plots(self):
+        ''' Triggers an update of each plot. '''
+        self.for_each_recorder(self.update_chart)
+
+    def set_visible_recorders(self, recorders):
+        '''
+        Updates the visible axes.
+        :param axes: the axes.
+        '''
+        self.__visible_recorders = recorders
+        self.update_all_plots()
 
     def set_actual_fps(self):
         ''' pushes the tick count to the actual fps widget. '''
@@ -162,9 +177,14 @@ class VisibleChart:
         self.__actual_fps_widget.setValue(val)
         self.__ticks = 0
 
-    @property
-    def visible_series(self):
-        return self.__visible_series
+    def is_visible(self, recorder=None, axis=None):
+        '''
+        :param recorder: the recorder name.
+        :param axis: the axis.
+        :return: true if both are visible.
+        '''
+        return (axis is None or axis in self.__visible_axes) and \
+               (recorder is None or recorder in self.__visible_recorders)
 
     @property
     def fps(self):

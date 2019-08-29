@@ -505,12 +505,16 @@
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="snapButton">
-              <property name="enabled">
-               <bool>true</bool>
-              </property>
+             <widget class="QToolButton" name="snapButton">
               <property name="text">
-               <string>Snap</string>
+               <string>...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="deleteSnapButton">
+              <property name="text">
+               <string>...</string>
               </property>
              </widget>
             </item>
@@ -924,7 +928,7 @@
    <slot>reset_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1243</x>
+     <x>1417</x>
      <y>139</y>
     </hint>
     <hint type="destinationlabel">
@@ -940,7 +944,7 @@
    <slot>apply_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1243</x>
+     <x>1417</x>
      <y>99</y>
     </hint>
     <hint type="destinationlabel">
@@ -956,7 +960,7 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1204</x>
+     <x>1378</x>
      <y>98</y>
     </hint>
     <hint type="destinationlabel">
@@ -972,7 +976,7 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1204</x>
+     <x>1378</x>
      <y>138</y>
     </hint>
     <hint type="destinationlabel">
@@ -988,7 +992,7 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1203</x>
+     <x>1377</x>
      <y>168</y>
     </hint>
     <hint type="destinationlabel">
@@ -1004,7 +1008,7 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1203</x>
+     <x>1377</x>
      <y>206</y>
     </hint>
     <hint type="destinationlabel">
@@ -1020,7 +1024,7 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1203</x>
+     <x>1377</x>
      <y>236</y>
     </hint>
     <hint type="destinationlabel">
@@ -1036,7 +1040,7 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>1203</x>
+     <x>1377</x>
      <y>274</y>
     </hint>
     <hint type="destinationlabel">

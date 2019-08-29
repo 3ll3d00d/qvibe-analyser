@@ -15,7 +15,7 @@ class Vibration(VisibleChart):
                  buffer_size_widget, analysis_type_widget):
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          True, analysis_mode=analysis_type_widget.currentText())
-        self.__series = {}
+        self.__plots = {}
         self.__chart = chart
         self.__sens = None
         self.__buffer_size = None
@@ -45,9 +45,9 @@ class Vibration(VisibleChart):
             format_pg_plotitem(self.__chart.getPlotItem(), (0, self.__buffer_size), (-self.__sens, self.__sens))
 
     def reset_chart(self):
-        for c in self.__series.values():
+        for c in self.__plots.values():
             self.__chart.removeItem(c)
-        self.__series = {}
+        self.__plots = {}
 
     def update_chart(self, recorder_name):
         '''
@@ -61,10 +61,16 @@ class Vibration(VisibleChart):
             self.create_or_update(d.z, t, 'b')
 
     def create_or_update(self, series, t, colour):
-        if series.name in self.visible_series:
-            if series.name in self.__series:
-                self.__series[series.name].setData(t, series.data)
+        name = self.__get_plot_name(series)
+        if self.is_visible(recorder=series.recorder_name, axis=series.axis) is True:
+            if name in self.__plots:
+                self.__plots[name].setData(t, series.data)
             else:
-                self.__series[series.name] = self.__chart.plot(t, series.data, pen=pg.mkPen(colour, width=1))
-        elif series.name in self.__series:
-            self.__chart.removeItem(self.__series[series.name])
+                self.__plots[name] = self.__chart.plot(t, series.data, pen=pg.mkPen(colour, width=1), name=name)
+        elif name in self.__plots:
+            self.__chart.removeItem(self.__plots[name])
+            del self.__plots[name]
+
+    @staticmethod
+    def __get_plot_name(sig):
+        return f"{sig.recorder_name}:{sig.axis}"
