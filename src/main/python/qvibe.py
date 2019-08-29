@@ -148,9 +148,6 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                           QMessageBox.No)
             if result == QMessageBox.Yes:
                 self.show_preferences()
-        # check whether we have snaps
-        for i in range(0, 3):
-            self.__snapshot_buttons[i].setEnabled(self.preferences.has(SNAPSHOT_x % i))
         self.snapButton.setIcon(qta.icon('fa5s.save'))
         self.deleteSnapButton.setIcon(qta.icon('fa5s.times'))
 

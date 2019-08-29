@@ -76,9 +76,13 @@ class RTA(VisibleChart):
         mag_max_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
         freq_min_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
-        # allow snapshots to be toggled on and off
+        # allow snapshots to be toggled on and off & set the initial state
         for idx, btn in enumerate(snapshot_buttons):
             btn.toggled[bool].connect(lambda s, i=idx: self.__toggle_snapshot(i, s))
+            has = self.preferences.has(SNAPSHOT_x % idx)
+            snapshot_buttons[idx].setEnabled(has)
+            if has is True:
+                self.__enable_snapshot_button(snapshot_buttons[idx], self.__load_snapshot(idx))
         # peak hold wiring
         peak_hold_selector.stateChanged.connect(self.__on_peak_hold_change)
         peak_secs.valueChanged['int'].connect(self.__set_peak_cache_size)
@@ -100,25 +104,31 @@ class RTA(VisibleChart):
             idx = int(snapshot_slot_selector.currentText()) - 1
             self.preferences.clear(SNAPSHOT_x % idx)
             snapshot_buttons[idx].setEnabled(False)
+            snapshot_buttons[idx].setToolTip(None)
             delete_snapshot_button.setEnabled(False)
             self.__show_snapshots()
 
         delete_snapshot_button.clicked.connect(delete_snapshot)
 
     def __toggle_snapshot(self, idx, state):
-        if state is True:
-            stored = self.preferences.get(SNAPSHOT_x % idx)
-            self.__loaded_snapshots[idx] = {
-                k: TriAxisSignal.decode(self.preferences,
-                                        self.resolution_shift,
-                                        v,
-                                        self.analysis_mode,
-                                        self.__active_view)
-                for k,v in stored.items()
-            }
-        else:
-            self.__loaded_snapshots[idx] = None
+        '''
+        Toggles the display state of the given snapshot.
+        :param idx: the index.
+        :param state: true if it should be shown.
+        '''
+        self.__loaded_snapshots[idx] = self.__load_snapshot(idx) if state is True else None
         self.__show_snapshots()
+
+    def __load_snapshot(self, idx):
+        stored = self.preferences.get(SNAPSHOT_x % idx)
+        return {
+            k: TriAxisSignal.decode(self.preferences,
+                                    self.resolution_shift,
+                                    v,
+                                    self.analysis_mode,
+                                    self.__active_view)
+            for k, v in stored.items()
+        }
 
     def __save_snapshot(self, snapshot_id, snapshot_button, delete_snapshot_button):
         '''
@@ -129,9 +139,20 @@ class RTA(VisibleChart):
         '''
         data = {name: self.cached_data(name)[-1].encode() for name in self.cached_recorder_names()}
         self.preferences.set(SNAPSHOT_x % snapshot_id, data)
-        snapshot_button.setEnabled(True)
         delete_snapshot_button.setEnabled(True)
+        self.__enable_snapshot_button(snapshot_button, data)
         self.__show_snapshots()
+
+    @staticmethod
+    def __enable_snapshot_button(snapshot_button, data):
+        '''
+        Enables the button and adds a tooltip.
+        :param snapshot_button: the button.
+        :param data: the snapshot data.
+        '''
+        snapshot_button.setEnabled(True)
+        tip = '\n'.join(data.keys())
+        snapshot_button.setToolTip(tip)
 
     def __set_peak_cache_size(self, seconds):
         '''
