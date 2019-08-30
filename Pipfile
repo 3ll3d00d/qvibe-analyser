@@ -15,6 +15,7 @@ requests = "*"
 markdown = "*"
 semver = "*"
 twisted = "*"
+pillow = "*"
 
 [dev-packages]
 pytest = "*"

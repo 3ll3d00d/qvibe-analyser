@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import pyqtgraph as pg
+from PIL import Image
 
 from common import format_pg_plotitem, colourmap
 from model.charts import VisibleChart, ChartEvent
@@ -9,6 +10,7 @@ from model.signal import Signal, TriAxisSignal
 
 logger = logging.getLogger('qvibe.vibration')
 
+RESIZE_FACTOR = 8
 
 class SpectrogramEvent(ChartEvent):
 
@@ -127,7 +129,7 @@ class Spectrogram(VisibleChart):
         x_scale = 1.0 / (meta.sxx.shape[0]/meta.f[-1])
         y_scale = (1.0/self.fs) * (self.min_nperseg / 2)
         logger.debug(f"Scaling spectrogram from {meta.sxx.shape} to x: {x_scale} y:{y_scale}")
-        image.scale(x_scale, y_scale)
+        image.scale(x_scale / RESIZE_FACTOR, y_scale / RESIZE_FACTOR)
         return p, image
 
     def __on_buffer_size_change(self, size):
@@ -183,6 +185,8 @@ class Spectrogram(VisibleChart):
             sxx = dat.get_analysis().sxx
             buf[c_idx-idx-1] = sxx.T
         self.__buffers[f"{recorder}:{axis}"] = buf
+        buf = np.array(Image.fromarray(buf).resize(size=[i*RESIZE_FACTOR for i in buf.shape[::-1]],
+                                                   resample=Image.LANCZOS))
         self.__series[f"{recorder}:{axis}"][1].setImage(buf.T, autoLevels=False)
 
     def make_event(self, recorder_name, data, idx):
