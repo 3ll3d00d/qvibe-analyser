@@ -41,6 +41,9 @@ CHART_MAG_MAX = 'chart/mag_max'
 CHART_FREQ_MIN = 'chart/freq_min'
 CHART_FREQ_MAX = 'chart/freq_max'
 
+CHART_SPECTRO_SCALE_FACTOR = 'chart/spectro/scale_factor'
+CHART_SPECTRO_SCALE_ALGO = 'chart/spectro/scale_algo'
+
 SUM_X_SCALE = 'sum/x_scale'
 SUM_Y_SCALE = 'sum/y_scale'
 SUM_Z_SCALE = 'sum/z_scale'
@@ -59,6 +62,8 @@ DEFAULT_PREFS = {
     CHART_MAG_MAX: 120,
     CHART_FREQ_MIN: 1,
     CHART_FREQ_MAX: 125,
+    CHART_SPECTRO_SCALE_FACTOR: '8x',
+    CHART_SPECTRO_SCALE_ALGO: 'Lanczos',
     DISPLAY_SMOOTH_GRAPHS: True,
     RECORDER_TARGET_FS: 500,
     RECORDER_TARGET_SAMPLES_PER_BATCH: 8,
@@ -177,12 +182,13 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
     Allows user to set some basic preferences.
     '''
 
-    def __init__(self, preferences, style_root, recorder_store, parent=None):
+    def __init__(self, preferences, style_root, recorder_store, spectro, parent=None):
         super(PreferencesDialog, self).__init__(parent)
         self.__style_root = style_root
         self.__recorder_store = recorder_store
         self.setupUi(self)
         self.__preferences = preferences
+        self.__spectro = spectro
         self.buttonBox.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self.__reset)
         self.checkForUpdates.setChecked(self.__preferences.get(SYSTEM_CHECK_FOR_UPDATES))
         self.checkForBetaUpdates.setChecked(self.__preferences.get(SYSTEM_CHECK_FOR_BETA_UPDATES))
@@ -198,6 +204,8 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.freqMin.valueChanged['int'].connect(self.__balance_freq)
         self.freqMax.valueChanged['int'].connect(self.__balance_freq)
         self.wavSaveDir.setText(self.__preferences.get(WAV_DOWNLOAD_DIR))
+        self.spectroScaleAlgo.setCurrentText(self.__preferences.get(CHART_SPECTRO_SCALE_ALGO))
+        self.spectroScaleFactor.setCurrentText(self.__preferences.get(CHART_SPECTRO_SCALE_FACTOR))
         self.wavSaveDirPicker.setIcon(qta.icon('fa5s.folder-open'))
         self.addRecorderButton.setIcon(qta.icon('fa5s.plus'))
         self.deleteRecorderButton.setIcon(qta.icon('fa5s.times'))
@@ -291,6 +299,10 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.__preferences.set(CHART_MAG_MAX, self.magMax.value())
         self.__preferences.set(CHART_FREQ_MIN, self.freqMin.value())
         self.__preferences.set(CHART_FREQ_MAX, self.freqMax.value())
+        self.__preferences.set(CHART_SPECTRO_SCALE_ALGO, self.spectroScaleAlgo.currentText())
+        self.__preferences.set(CHART_SPECTRO_SCALE_FACTOR, self.spectroScaleFactor.currentText())
+        # TODO would be nicer to be able to listen to specific values
+        self.__spectro.update_scale()
         if self.recorders.count() > 0:
             ips = [self.recorders.itemText(i) for i in range(self.recorders.count())]
             self.__preferences.set(RECORDER_SAVED_IPS, '|'.join(ips))

@@ -442,7 +442,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         Shows the preferences dialog.
         '''
-        PreferencesDialog(self.preferences, self.__style_path_root, self.__recorder_store, parent=self).exec()
+        PreferencesDialog(self.preferences, self.__style_path_root, self.__recorder_store, self.__analysers[2], parent=self).exec()
 
     def show_about(self):
         msg_box = QMessageBox()

@@ -6,11 +6,11 @@ from PIL import Image
 
 from common import format_pg_plotitem, colourmap
 from model.charts import VisibleChart, ChartEvent
+from model.preferences import CHART_SPECTRO_SCALE_FACTOR, CHART_SPECTRO_SCALE_ALGO
 from model.signal import Signal, TriAxisSignal
 
 logger = logging.getLogger('qvibe.vibration')
 
-RESIZE_FACTOR = 8
 
 class SpectrogramEvent(ChartEvent):
 
@@ -47,6 +47,8 @@ class Spectrogram(VisibleChart):
         self.__buffers = {}
         self.__last_idx = {}
         self.__recorders = []
+        self.__scale_factor = None
+        self.__scale_algo = None
 
         self.__qview = chart
         self.__mag_min = lambda: mag_min_widget.value()
@@ -63,10 +65,27 @@ class Spectrogram(VisibleChart):
         freq_min_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
+        self.update_scale()
         self.__on_buffer_size_change(buffer_size_widget.value())
         self.__reset_limits()
         active_recorders_widget.itemSelectionChanged.connect(self.__change_row_viz)
         active_signals_widget.itemSelectionChanged.connect(self.__change_column_viz)
+
+    def update_scale(self):
+        '''
+        update the scaling algorithm.
+        '''
+        new_scale_factor = int(self.preferences.get(CHART_SPECTRO_SCALE_FACTOR)[0:-1])
+        new_scale_algo = getattr(Image, self.preferences.get(CHART_SPECTRO_SCALE_ALGO).upper())
+        if new_scale_factor != self.__scale_factor or new_scale_algo != self.__scale_algo:
+            logger.info(f"Changing scaling from {self.__scale_factor} {self.__scale_algo} to {new_scale_factor} {new_scale_algo}")
+            self.__scale_factor = new_scale_factor
+            self.__scale_algo = new_scale_algo
+            if self.visible is True:
+                for c in self.__series.values():
+                    self.__qview.removeItem(c[0])
+                self.__series = {}
+                self.__change_row_viz()
 
     def __change_row_viz(self):
         for i in range(0, self.__all_recorders.count()):
@@ -129,7 +148,7 @@ class Spectrogram(VisibleChart):
         x_scale = 1.0 / (meta.sxx.shape[0]/meta.f[-1])
         y_scale = (1.0/self.fs) * (self.min_nperseg / 2)
         logger.debug(f"Scaling spectrogram from {meta.sxx.shape} to x: {x_scale} y:{y_scale}")
-        image.scale(x_scale / RESIZE_FACTOR, y_scale / RESIZE_FACTOR)
+        image.scale(x_scale / self.__scale_factor, y_scale / self.__scale_factor)
         return p, image
 
     def __on_buffer_size_change(self, size):
@@ -185,8 +204,8 @@ class Spectrogram(VisibleChart):
             sxx = dat.get_analysis().sxx
             buf[c_idx-idx-1] = sxx.T
         self.__buffers[f"{recorder}:{axis}"] = buf
-        buf = np.array(Image.fromarray(buf).resize(size=[i*RESIZE_FACTOR for i in buf.shape[::-1]],
-                                                   resample=Image.LANCZOS))
+        buf = np.array(Image.fromarray(buf).resize(size=[i*self.__scale_factor for i in buf.shape[::-1]],
+                                                   resample=self.__scale_algo))
         self.__series[f"{recorder}:{axis}"][1].setImage(buf.T, autoLevels=False)
 
     def make_event(self, recorder_name, data, idx):
