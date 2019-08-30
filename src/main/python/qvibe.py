@@ -3,6 +3,7 @@ import os
 import sys
 import time
 
+from model.charts import ColourProvider
 from model.rta import RTA
 from model.save import SaveChartDialog, SaveWavDialog
 from model.spectrogram import Spectrogram
@@ -123,13 +124,15 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.freqMax.valueChanged['int'].connect(lambda v: keep_min_freq_range())
 
         # charts
+        colour_provider = ColourProvider()
         self.__analysers = {
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
-                         self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
+                         self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis,
+                         colour_provider),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
                    self.__snapshot_buttons, self.__snapshot_actions, self.snapButton, self.deleteSnapButton,
-                   self.snapSlotSelector, self.peakHold, self.peakSecs),
+                   self.snapSlotSelector, self.peakHold, self.peakSecs, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.activeRecorders, self.visibleCurves),

@@ -7,6 +7,7 @@ from queue import Queue, Empty
 from collections import deque
 from qtpy.QtCore import QObject, Signal, QThread, QTimer
 
+from common import colourmap
 from model.log import to_millis
 from model.signal import TriAxisSignal, get_segment_length
 
@@ -354,3 +355,26 @@ class VisibleChart:
         '''
         return ChartEvent(self, recorder_name, data, idx, self.preferences, self.budget_millis,
                           analysis_mode=self.analysis_mode)
+
+
+class ColourProvider:
+    ''' Allows consistent colours for specific recorder/axis combinations to be maintained across views. '''
+    def __init__(self):
+        self.__cm = colourmap(name='tab20')
+        self.__cm_index = 0
+        self.__plot_colours = {}
+
+    def get_colour(self, plot_name):
+        '''
+        :param plot_name: the plot name.
+        :return: the colour for this plot.
+        '''
+        col_name = plot_name[0:-5] if plot_name[-5:] == ':peak' else plot_name
+        col = self.__plot_colours[col_name] if col_name in self.__plot_colours else self.__next_colour()
+        self.__plot_colours[plot_name] = col
+        return col
+
+    def __next_colour(self):
+        colour = self.__cm[self.__cm_index % len(self.__cm)][1]
+        self.__cm_index += 1
+        return colour

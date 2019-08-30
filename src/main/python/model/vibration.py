@@ -12,10 +12,12 @@ logger = logging.getLogger('qvibe.vibration')
 class Vibration(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, accel_sens_widget,
-                 buffer_size_widget, analysis_type_widget):
+                 buffer_size_widget, analysis_type_widget, colour_provider):
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          True, analysis_mode=analysis_type_widget.currentText())
         self.__plots = {}
+        self.__legend = None
+        self.__colour_provider = colour_provider
         self.__chart = chart
         self.__sens = None
         self.__buffer_size = None
@@ -45,8 +47,9 @@ class Vibration(VisibleChart):
             format_pg_plotitem(self.__chart.getPlotItem(), (0, self.__buffer_size), (-self.__sens, self.__sens))
 
     def reset_chart(self):
-        for c in self.__plots.values():
+        for n, c in self.__plots.items():
             self.__chart.removeItem(c)
+            self.__legend.removeItem(n)
         self.__plots = {}
 
     def update_chart(self, recorder_name):
@@ -56,20 +59,24 @@ class Vibration(VisibleChart):
         d = self.cached_data(recorder_name)
         if d is not None:
             t = (d.time - np.min(d.time))/500
-            self.create_or_update(d.x, t, 'r')
-            self.create_or_update(d.y, t, 'g')
-            self.create_or_update(d.z, t, 'b')
+            self.create_or_update(d.x, t)
+            self.create_or_update(d.y, t)
+            self.create_or_update(d.z, t)
 
-    def create_or_update(self, series, t, colour):
+    def create_or_update(self, series, t):
         name = self.__get_plot_name(series)
         if self.is_visible(recorder=series.recorder_name, axis=series.axis) is True:
             if name in self.__plots:
                 self.__plots[name].setData(t, series.data)
             else:
+                colour = self.__colour_provider.get_colour(name)
+                if self.__legend is None:
+                    self.__legend = self.__chart.addLegend(offset=(-15, -15))
                 self.__plots[name] = self.__chart.plot(t, series.data, pen=pg.mkPen(colour, width=1), name=name)
         elif name in self.__plots:
             self.__chart.removeItem(self.__plots[name])
             del self.__plots[name]
+            self.__legend.removeItem(name)
 
     @staticmethod
     def __get_plot_name(sig):
