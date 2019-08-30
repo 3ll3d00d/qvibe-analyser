@@ -568,3 +568,15 @@ maps = {
 
 def colourmap(name='inferno'):
     return maps[name]
+
+
+def np_to_str(arr):
+    '''
+    Converts an ndarray to a string.
+    :param arr: the array.
+    :return: the string.
+    '''
+    import io
+    out = io.StringIO()
+    np.savetxt(out, arr)
+    return out.getvalue()

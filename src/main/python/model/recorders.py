@@ -225,7 +225,7 @@ class Recorder:
 
     def snap(self):
         '''
-        :return: a 3 entry tuple with the copy of the current data, the number of events since the last snap and the snap idx
+        :return: a 4 entry tuple with the ip of the recorder, copy of the current data, the number of events since the last snap and the snap idx
         '''
         start = time.time()
         b = self.__buffer.unwrap()
@@ -243,6 +243,14 @@ class Recorder:
         self.disconnect()
         self.signals.disconnect()
         self.__parent_layout.removeItem(self.__recorder_layout)
+
+    def replace(self, data):
+        '''
+        Replaces the current data with the supplied data. Intended to be used by loading.
+        :param data: the data.
+        '''
+        self.reset()
+        self.__buffer.extend(data)
 
 
 class RecorderStore(Sequence):
@@ -283,6 +291,14 @@ class RecorderStore(Sequence):
         self.__recorders.append(rec)
         return rec
 
+    def replace(self, ip, data):
+        rec = next((r for r in self if r.ip_address == ip), None)
+        if rec is None:
+            logger.info(f"Loading new recorder at {ip}")
+            rec = self.append()
+            rec.ip_address = ip
+        rec.replace(data)
+
     def load(self, ip_addresses):
         ''' Creates recorders for all given IP addresses. '''
         for ip in ip_addresses:
@@ -305,11 +321,11 @@ class RecorderStore(Sequence):
     def __len__(self):
         return len(self.__recorders)
 
-    def snap(self):
+    def snap(self, connected_only=True):
         '''
         :return: current data for each recorder.
         '''
-        return [r.snap() for r in self if r.connected is True]
+        return [r.snap() for r in self if connected_only is False or r.connected is True]
 
     def reset(self):
         ''' clears all cached data. '''

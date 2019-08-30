@@ -8,6 +8,7 @@ from scipy.interpolate import PchipInterpolator
 
 from model.log import to_millis
 from model.preferences import SUM_X_SCALE, SUM_Y_SCALE, SUM_Z_SCALE
+from common import np_to_str
 
 SAVGOL_WINDOW_LENGTH = 101
 SAVGOL_POLYORDER = 7
@@ -60,10 +61,7 @@ class TriAxisSignal:
         encodes the minimal data required to persist this signal
         :return: the signal encoded as a string.
         '''
-        import io
-        out = io.StringIO()
-        np.savetxt(out, self.__raw)
-        return f"{self.recorder_name}#{self.__idx}#{self.__raw.dtype}#{self.__fs}#{out.getvalue()}"
+        return f"{self.recorder_name}#{self.__idx}#{self.__raw.dtype}#{self.__fs}#{np_to_str(self.__raw)}"
 
     @property
     def view(self):

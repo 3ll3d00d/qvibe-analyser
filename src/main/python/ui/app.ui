@@ -414,6 +414,13 @@
             </property>
            </widget>
           </item>
+          <item row="0" column="9">
+           <widget class="QPushButton" name="findPeaksButton">
+            <property name="text">
+             <string>Find Peaks</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
         <widget class="QWidget" name="rtaTab">
@@ -890,16 +897,19 @@
     </property>
     <widget class="QMenu" name="menu_Snapshots">
      <property name="title">
-      <string>&amp;Snapshots</string>
+      <string>Snaps&amp;hots</string>
      </property>
      <addaction name="actionToggle_1"/>
      <addaction name="actionToggle_2"/>
      <addaction name="actionToggle_3"/>
     </widget>
-    <addaction name="actionSave_Chart"/>
+    <addaction name="actionLoad_Signal"/>
+    <addaction name="actionSave_Signal"/>
     <addaction name="actionExport_Wav"/>
     <addaction name="separator"/>
     <addaction name="menu_Snapshots"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave_Chart"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuSettings"/>
@@ -980,6 +990,22 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+S, Ctrl+3</string>
+   </property>
+  </action>
+  <action name="actionSave_Signal">
+   <property name="text">
+    <string>&amp;Save Signal</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionLoad_Signal">
+   <property name="text">
+    <string>&amp;Load Signal</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
    </property>
   </action>
  </widget>

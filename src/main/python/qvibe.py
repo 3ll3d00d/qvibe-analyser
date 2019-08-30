@@ -1,3 +1,5 @@
+import gzip
+import json
 import logging
 import os
 import sys
@@ -18,12 +20,13 @@ os.environ['QT_API'] = 'pyqt5'
 
 import pyqtgraph as pg
 import qtawesome as qta
+import numpy as np
 
 from qtpy import QtCore
 from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QTime
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
-from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox
-from common import block_signals, ReactorRunner
+from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox, QFileDialog
+from common import block_signals, ReactorRunner, np_to_str
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
     CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX, SNAPSHOT_x
@@ -129,7 +132,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis,
                          self.leftMarker, self.rightMarker, self.timeRange, self.zoomInButton, self.zoomOutButton,
-                         colour_provider),
+                         self.findPeaksButton, colour_provider),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
                    self.__snapshot_buttons, self.__snapshot_actions, self.snapButton, self.deleteSnapButton,
@@ -157,6 +160,60 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.deleteSnapButton.setIcon(qta.icon('fa5s.times'))
         self.zoomInButton.setIcon(qta.icon('fa5s.compress-arrows-alt'))
         self.zoomOutButton.setIcon(qta.icon('fa5s.expand-arrows-alt'))
+        self.actionSave_Signal.triggered.connect(self.__save_signal)
+        self.actionLoad_Signal.triggered.connect(self.__load_signal)
+
+    def __save_signal(self):
+        dat = {snap[0]: np_to_str(snap[1]) for snap in self.__recorder_store.snap(connected_only=False) if len(snap[1]) > 0}
+        if len(dat.keys()) > 0:
+            file_name = QFileDialog(self).getSaveFileName(self, 'Save Signal', f"signal.qvibe", "QVibe Signals (*.qvibe)")
+            file_name = str(file_name[0]).strip()
+            if len(file_name) > 0:
+                with gzip.open(file_name, 'wb+') as outfile:
+                    outfile.write(json.dumps(dat).encode('utf-8'))
+                self.statusbar.showMessage(f"Saved to {file_name}")
+        else:
+            msg_box = QMessageBox()
+            msg_box.setText('No data has been recorded')
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle('Nothing to Save')
+            msg_box.exec()
+
+    def __load_signal(self):
+        '''
+        Loads a new signal (replacing any current data if required).
+        '''
+
+        def parser(file_name):
+            with gzip.open(file_name, 'r') as infile:
+                return json.loads(infile.read().decode('utf-8'))
+        input = self.__load('*.qvibe', 'Load Signal', parser)
+        if input is not None and len(input.keys()) > 0:
+            self.reset_recording()
+            for ip, data_txt in input.items():
+                import io
+                data = np.loadtxt(io.StringIO(data_txt), dtype=np.float64, ndmin=2)
+                self.__recorder_store.replace(ip, data)
+                self.__add_recorder(ip)
+            self.__snap_and_push(connected_only=False)
+
+    def __load(self, filter, title, parser):
+        '''
+        Presents a file dialog to the user so they can choose something to load.
+        :return: the loaded thing, if any.
+        '''
+        input = None
+        dialog = QFileDialog(parent=self)
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        dialog.setNameFilter(filter)
+        dialog.setWindowTitle(title)
+        if dialog.exec():
+            selected = dialog.selectedFiles()
+            if len(selected) > 0:
+                input = parser(selected[0])
+                if input is not None:
+                    self.statusbar.showMessage(f"Loaded {selected[0]}")
+        return input
 
     def reset_recording(self):
         self.__recorder_store.reset()
@@ -183,14 +240,17 @@ class QVibe(QMainWindow, Ui_MainWindow):
         any_connected = self.__recorder_store.any_connected()
         self.fps.setEnabled(not any_connected)
         self.bufferSize.setEnabled(not any_connected)
-        if len(self.activeRecorders.findItems(ip, Qt.MatchExactly)) == 0:
-            self.activeRecorders.addItem(ip)
-            for i in self.activeRecorders.findItems(ip, Qt.MatchExactly):
-                i.setSelected(True)
+        self.__add_recorder(ip)
         if any_connected is True:
             self.__on_start_recording()
         else:
             self.__on_stop_recording()
+
+    def __add_recorder(self, ip):
+        if len(self.activeRecorders.findItems(ip, Qt.MatchExactly)) == 0:
+            self.activeRecorders.addItem(ip)
+            for i in self.activeRecorders.findItems(ip, Qt.MatchExactly):
+                i.setSelected(True)
 
     def __on_start_recording(self):
         '''
@@ -215,8 +275,13 @@ class QVibe(QMainWindow, Ui_MainWindow):
         elapsed = round((time.time() * 1000) - self.__start_time)
         new_time = QTime(0, 0, 0, 0).addMSecs(elapsed)
         self.elapsedTime.setTime(new_time)
-        snaps = self.__recorder_store.snap()
-        for name, signal, count, idx in snaps:
+        self.__snap_and_push()
+
+    def __snap_and_push(self, connected_only=True):
+        '''
+        pushes the latest snaps to the analysers.
+        '''
+        for name, signal, count, idx in self.__recorder_store.snap(connected_only=connected_only):
             if count > 0:
                 for c in self.__analysers.values():
                     c.accept(name, signal, idx)

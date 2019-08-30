@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import pyqtgraph as pg
+from scipy.signal import find_peaks
 
 from common import format_pg_plotitem, block_signals
 from model.charts import VisibleChart
@@ -13,7 +14,7 @@ class Vibration(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, accel_sens_widget,
                  buffer_size_widget, analysis_type_widget, left_marker_pos, right_marker_pos, time_range,
-                 zoom_in_button, zoom_out_button, colour_provider):
+                 zoom_in_button, zoom_out_button, find_peaks_button, colour_provider):
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          True, analysis_mode=analysis_type_widget.currentText())
         self.__plots = {}
@@ -38,6 +39,34 @@ class Vibration(VisibleChart):
         self.__on_sens_change(accel_sens_widget.currentText())
         zoom_in_button.clicked.connect(self.__zoom_to_marker)
         zoom_out_button.clicked.connect(self.__reset_limits)
+        self.__find_peaks_button = find_peaks_button
+        self.__find_peaks_button.clicked.connect(self.__find_peaks)
+        self.__find_peaks_button.setEnabled(False)
+
+    def __find_peaks(self):
+        '''
+        Looks for peaks in the signal using a continuous wavelet transform.
+        '''
+        name, plot = next(iter(self.__plots.items()))
+        x_min, x_max = self.__chart.getPlotItem().viewRange()[0]
+        x_min_idx = np.argmax(plot.xData >= x_min-0.00001)
+        x_max_idx = np.argmax(plot.xData >= x_max-0.00001) if x_max < plot.xData[-1] else -1
+        y_data = np.require(plot.yData[x_min_idx:x_max_idx], requirements=['O', 'W'])
+        peak_y = np.amax(y_data)
+        peaks = find_peaks(y_data, height=peak_y * 0.99)
+        if len(peaks[0]) > 0:
+            peaks = peaks[0] + x_min_idx
+            if len(peaks) > 1:
+                left = plot.xData[peaks[0]]
+                right = plot.xData[peaks[1]]
+                logger.info(f"Found {len(peaks)} peaks in {name} - {left} -> {right}")
+                self.__left_marker_pos.setValue(left)
+            else:
+                right = plot.xData[peaks[0]]
+                logger.info(f"Found 1 peak in {name} - {right}")
+            self.__right_marker_pos.setValue(right)
+        else:
+            logger.info(f"No values found within 1% of {peak_y}")
 
     def __propagate_marker(self, widget, value):
         with block_signals(widget):
@@ -53,9 +82,21 @@ class Vibration(VisibleChart):
         self.__time_range.setValue(value - self.__left_marker.value())
 
     def __zoom_to_marker(self):
-        self.__chart.getPlotItem().setXRange(self.__left_marker_pos.value()-0.001,
-                                             self.__right_marker_pos.value()+0.001,
-                                             padding=0.0)
+        self.__chart.getPlotItem().setXRange(self.__left_marker_pos.value(), self.__right_marker_pos.value())
+        lims = self.__chart.getPlotItem().viewRange()
+        x_min, x_max = lims[0]
+        y_min, y_max = lims[1]
+        y_maxes = []
+        y_mins = []
+        for name, plot in self.__plots.items():
+            x_min_idx = np.argmax(plot.xData >= x_min)
+            x_max_idx = np.argmax(plot.xData >= x_max) if x_max < plot.xData[-1] else -1
+            y_data = plot.yData[x_min_idx:x_max_idx]
+            y_mins.append(np.amin(y_data))
+            y_maxes.append(np.amax(y_data))
+        new_y_max = max(y_maxes)
+        new_y_min = min(y_mins)
+        self.__chart.getPlotItem().setYRange(max(new_y_min, y_min), min(new_y_max, y_max))
 
     def __on_analysis_mode_change(self, analysis_mode):
         logger.info(f"Changing analysis mode from {self.analysis_mode} to {analysis_mode}")
@@ -108,6 +149,7 @@ class Vibration(VisibleChart):
             self.__chart.removeItem(self.__plots[name])
             del self.__plots[name]
             self.__legend.removeItem(name)
+        self.__find_peaks_button.setEnabled(len(self.__plots.keys()) == 1)
 
     def __init_markers(self):
         self.__left_marker = pg.InfiniteLine(movable=True, bounds=[0.000, self.__buffer_size-0.001])
