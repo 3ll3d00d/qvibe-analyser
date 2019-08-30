@@ -33,8 +33,8 @@ class RTA(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, rta_average_widget,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
-                 snapshot_buttons, take_snapshot_button, delete_snapshot_button, snapshot_slot_selector,
-                 peak_hold_selector, peak_secs):
+                 snapshot_buttons, snapshot_actions, take_snapshot_button, delete_snapshot_button,
+                 snapshot_slot_selector, peak_hold_selector, peak_secs):
         self.__average = None
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True,
                          cache_size=-1, cache_purger=self.__purge_cache)
@@ -78,11 +78,14 @@ class RTA(VisibleChart):
         freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         # allow snapshots to be toggled on and off & set the initial state
         for idx, btn in enumerate(snapshot_buttons):
-            btn.toggled[bool].connect(lambda s, i=idx: self.__toggle_snapshot(i, s))
+            action = lambda s, i=idx: self.__toggle_snapshot(i, s)
+            btn.toggled[bool].connect(action)
+            snapshot_actions[idx].toggled[bool].connect(action)
             has = self.preferences.has(SNAPSHOT_x % idx)
-            snapshot_buttons[idx].setEnabled(has)
             if has is True:
-                self.__enable_snapshot_button(snapshot_buttons[idx], self.__load_snapshot(idx))
+                self.__enable_snapshot_button(snapshot_buttons[idx], snapshot_actions[idx], self.__load_snapshot(idx))
+            else:
+                self.__disable_snapshot_button(snapshot_buttons[idx], snapshot_actions[idx])
         # peak hold wiring
         peak_hold_selector.stateChanged.connect(self.__on_peak_hold_change)
         peak_secs.valueChanged['int'].connect(self.__set_peak_cache_size)
@@ -90,7 +93,7 @@ class RTA(VisibleChart):
 
         def save_snapshot():
             idx = int(snapshot_slot_selector.currentText()) - 1
-            self.__save_snapshot(idx, snapshot_buttons[idx], delete_snapshot_button)
+            self.__save_snapshot(idx, snapshot_buttons[idx], snapshot_actions[idx], delete_snapshot_button)
 
         take_snapshot_button.clicked.connect(save_snapshot)
 
@@ -103,8 +106,7 @@ class RTA(VisibleChart):
         def delete_snapshot():
             idx = int(snapshot_slot_selector.currentText()) - 1
             self.preferences.clear(SNAPSHOT_x % idx)
-            snapshot_buttons[idx].setEnabled(False)
-            snapshot_buttons[idx].setToolTip(None)
+            self.__disable_snapshot_button(snapshot_buttons[idx], snapshot_actions[idx])
             delete_snapshot_button.setEnabled(False)
             self.__show_snapshots()
 
@@ -130,7 +132,7 @@ class RTA(VisibleChart):
             for k, v in stored.items()
         }
 
-    def __save_snapshot(self, snapshot_id, snapshot_button, delete_snapshot_button):
+    def __save_snapshot(self, snapshot_id, snapshot_button, snapshot_action, delete_snapshot_button):
         '''
         Saves the current data as a snapshot.
         :param snapshot_id: the snapshot id.
@@ -140,17 +142,29 @@ class RTA(VisibleChart):
         data = {name: self.cached_data(name)[-1].encode() for name in self.cached_recorder_names()}
         self.preferences.set(SNAPSHOT_x % snapshot_id, data)
         delete_snapshot_button.setEnabled(True)
-        self.__enable_snapshot_button(snapshot_button, data)
+        self.__enable_snapshot_button(snapshot_button, snapshot_action, data)
         self.__show_snapshots()
 
     @staticmethod
-    def __enable_snapshot_button(snapshot_button, data):
+    def __disable_snapshot_button(snapshot_button, snapshot_action):
+        '''
+        Disables the button and removes the tooltip.
+        :param snapshot_button: the button.
+        :param data: the snapshot data.
+        '''
+        snapshot_button.setEnabled(False)
+        snapshot_action.setEnabled(False)
+        snapshot_button.setToolTip(None)
+
+    @staticmethod
+    def __enable_snapshot_button(snapshot_button, snapshot_action, data):
         '''
         Enables the button and adds a tooltip.
         :param snapshot_button: the button.
         :param data: the snapshot data.
         '''
         snapshot_button.setEnabled(True)
+        snapshot_action.setEnabled(True)
         tip = '\n'.join(data.keys())
         snapshot_button.setToolTip(tip)
 

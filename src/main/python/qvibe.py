@@ -75,6 +75,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.app.aboutToQuit.connect(runner.stop)
         # snapshot loaders
         self.__snapshot_buttons = [self.snap1, self.snap2, self.snap3]
+        self.__snapshot_actions = [self.actionToggle_1, self.actionToggle_2, self.actionToggle_3]
         # core domain stores
         self.__timer = None
         self.__start_time = None
@@ -127,8 +128,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
-                   self.__snapshot_buttons, self.snapButton, self.deleteSnapButton, self.snapSlotSelector,
-                   self.peakHold, self.peakSecs),
+                   self.__snapshot_buttons, self.__snapshot_actions, self.snapButton, self.deleteSnapButton,
+                   self.snapSlotSelector, self.peakHold, self.peakSecs),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.activeRecorders, self.visibleCurves),

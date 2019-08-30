@@ -300,7 +300,7 @@
       <item row="0" column="0">
        <widget class="QTabWidget" name="chartTabs">
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="vibrationTab">
          <attribute name="title">
@@ -820,8 +820,18 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
+    <widget class="QMenu" name="menu_Snapshots">
+     <property name="title">
+      <string>&amp;Snapshots</string>
+     </property>
+     <addaction name="actionToggle_1"/>
+     <addaction name="actionToggle_2"/>
+     <addaction name="actionToggle_3"/>
+    </widget>
     <addaction name="actionSave_Chart"/>
     <addaction name="actionExport_Wav"/>
+    <addaction name="separator"/>
+    <addaction name="menu_Snapshots"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuSettings"/>
@@ -854,7 +864,7 @@
     <string>Save &amp;Chart</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+S</string>
+    <string>Ctrl+Shift+S</string>
    </property>
    <property name="shortcutContext">
     <enum>Qt::ApplicationShortcut</enum>
@@ -869,6 +879,39 @@
    </property>
    <property name="shortcutContext">
     <enum>Qt::ApplicationShortcut</enum>
+   </property>
+  </action>
+  <action name="actionToggle_2">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Toggle &amp;2</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S, Ctrl+2</string>
+   </property>
+  </action>
+  <action name="actionToggle_1">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Toggle &amp;1</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S, Ctrl+1</string>
+   </property>
+  </action>
+  <action name="actionToggle_3">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Toggle &amp;3</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S, Ctrl+3</string>
    </property>
   </action>
  </widget>
