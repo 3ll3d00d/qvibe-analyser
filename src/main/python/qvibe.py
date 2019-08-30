@@ -128,6 +128,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.__analysers = {
             0: Vibration(self.liveVibrationChart, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                          self.resolutionHz, self.targetAccelSens, self.bufferSize, self.vibrationAnalysis,
+                         self.leftMarker, self.rightMarker, self.timeRange, self.zoomInButton, self.zoomOutButton,
                          colour_provider),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
@@ -154,6 +155,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
                 self.show_preferences()
         self.snapButton.setIcon(qta.icon('fa5s.save'))
         self.deleteSnapButton.setIcon(qta.icon('fa5s.times'))
+        self.zoomInButton.setIcon(qta.icon('fa5s.compress-arrows-alt'))
+        self.zoomOutButton.setIcon(qta.icon('fa5s.expand-arrows-alt'))
 
     def reset_recording(self):
         self.__recorder_store.reset()
