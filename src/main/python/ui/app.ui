@@ -14,281 +14,552 @@
    <string>QVibe Analyser</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="mainLayout" stretch="1,10,1">
+   <layout class="QHBoxLayout" name="mainLayout" stretch="1,6">
     <item>
-     <layout class="QVBoxLayout" name="chartControlLayout" stretch="0,0,2,0,1,1,0">
+     <layout class="QVBoxLayout" name="chartControlLayout" stretch="0,0">
       <item>
-       <widget class="QLabel" name="chartControlsLabel">
-        <property name="font">
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
+       <widget class="QToolBox" name="controlsBox">
         <property name="frameShape">
-         <enum>QFrame::Box</enum>
+         <enum>QFrame::NoFrame</enum>
         </property>
         <property name="frameShadow">
-         <enum>QFrame::Sunken</enum>
+         <enum>QFrame::Plain</enum>
         </property>
-        <property name="text">
-         <string>Chart Controls</string>
+        <property name="currentIndex">
+         <number>5</number>
         </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="activeRecordersLabel">
-        <property name="text">
-         <string>Visible Recorders</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QListWidget" name="activeRecorders">
-        <property name="selectionMode">
-         <enum>QAbstractItemView::MultiSelection</enum>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="visibleCurvesLabel">
-        <property name="text">
-         <string>Visible Curves</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QListWidget" name="visibleCurves">
-        <property name="selectionMode">
-         <enum>QAbstractItemView::MultiSelection</enum>
-        </property>
-        <property name="resizeMode">
-         <enum>QListView::Fixed</enum>
-        </property>
-        <item>
-         <property name="text">
-          <string>x</string>
+        <widget class="QWidget" name="signalSelectorBox">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>199</width>
+           <height>459</height>
+          </rect>
          </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>y</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>z</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>sum</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item>
-       <spacer name="verticalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <layout class="QGridLayout" name="extraControlsLayout">
-        <item row="5" column="1">
-         <widget class="QSpinBox" name="fps">
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>50</number>
-          </property>
-          <property name="value">
-           <number>20</number>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="resolutionHzLabel">
-          <property name="text">
-           <string>Resolution</string>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="0">
-         <widget class="QLabel" name="bufferSizeLabel">
-          <property name="text">
-           <string>Buffer</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QSpinBox" name="magMin">
-          <property name="suffix">
-           <string> dB</string>
-          </property>
-          <property name="maximum">
-           <number>150</number>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <layout class="QHBoxLayout" name="freqLayout">
+         <attribute name="label">
+          <string>Signal Selector</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="chooseSignalsLayout">
           <item>
-           <widget class="QSpinBox" name="freqMin">
-            <property name="suffix">
-             <string> Hz</string>
-            </property>
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>1000</number>
+           <widget class="QLabel" name="activeRecordersLabel">
+            <property name="text">
+             <string>Visible Recorders</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QSpinBox" name="freqMax">
-            <property name="suffix">
-             <string> Hz</string>
-            </property>
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>1000</number>
+           <widget class="QListWidget" name="activeRecorders">
+            <property name="selectionMode">
+             <enum>QAbstractItemView::MultiSelection</enum>
             </property>
            </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="visibleCurvesLabel">
+            <property name="text">
+             <string>Visible Curves</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QListWidget" name="visibleCurves">
+            <property name="selectionMode">
+             <enum>QAbstractItemView::MultiSelection</enum>
+            </property>
+            <property name="resizeMode">
+             <enum>QListView::Fixed</enum>
+            </property>
+            <item>
+             <property name="text">
+              <string>x</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>y</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>z</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>sum</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
           </item>
          </layout>
-        </item>
-        <item row="5" column="0">
-         <widget class="QLabel" name="fpsLabel">
-          <property name="text">
-           <string>Target FPS</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="QComboBox" name="resolutionHz">
-          <item>
-           <property name="text">
-            <string>0.25 Hz</string>
-           </property>
+        </widget>
+        <widget class="QWidget" name="measurementBox">
+         <attribute name="label">
+          <string>Saved Measurements</string>
+         </attribute>
+        </widget>
+        <widget class="QWidget" name="limitsBox">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>199</width>
+           <height>459</height>
+          </rect>
+         </property>
+         <attribute name="label">
+          <string>Chart Limits</string>
+         </attribute>
+         <layout class="QGridLayout" name="extraControlsLayout">
+          <item row="2" column="0" rowspan="2">
+           <widget class="QLabel" name="magRangeLabel">
+            <property name="text">
+             <string>Magnitude (dB)</string>
+            </property>
+           </widget>
           </item>
-          <item>
-           <property name="text">
-            <string>0.5 Hz</string>
-           </property>
+          <item row="4" column="0">
+           <widget class="QSpinBox" name="magMax">
+            <property name="suffix">
+             <string/>
+            </property>
+            <property name="maximum">
+             <number>150</number>
+            </property>
+            <property name="value">
+             <number>150</number>
+            </property>
+           </widget>
           </item>
-          <item>
-           <property name="text">
-            <string>1.0 Hz</string>
-           </property>
+          <item row="1" column="0">
+           <layout class="QHBoxLayout" name="freqLayout">
+            <item>
+             <widget class="QSpinBox" name="freqMin">
+              <property name="suffix">
+               <string/>
+              </property>
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="freqMax">
+              <property name="suffix">
+               <string/>
+              </property>
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+              <property name="value">
+               <number>1</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
-          <item>
-           <property name="text">
-            <string>2.0 Hz</string>
-           </property>
+          <item row="5" column="0">
+           <widget class="QSpinBox" name="magMin">
+            <property name="suffix">
+             <string/>
+            </property>
+            <property name="maximum">
+             <number>150</number>
+            </property>
+           </widget>
           </item>
-          <item>
-           <property name="text">
-            <string>4.0 Hz</string>
-           </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="freqLabel">
+            <property name="text">
+             <string>Freq (Hz)</string>
+            </property>
+           </widget>
           </item>
-         </widget>
-        </item>
-        <item row="6" column="1">
-         <widget class="QSpinBox" name="actualFPS">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="maximum">
-           <number>120</number>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="1">
-         <widget class="QSpinBox" name="bufferSize">
-          <property name="suffix">
-           <string> s</string>
-          </property>
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>240</number>
-          </property>
-          <property name="value">
-           <number>30</number>
-          </property>
-         </widget>
-        </item>
-        <item row="6" column="0">
-         <widget class="QLabel" name="actualFPSLabel">
-          <property name="text">
-           <string>Actual FPS</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0" rowspan="2">
-         <widget class="QLabel" name="magRangeLabel">
-          <property name="text">
-           <string>Magnitude</string>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="0">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>Elapsed</string>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="1">
-         <widget class="QTimeEdit" name="elapsedTime">
-          <property name="readOnly">
-           <bool>true</bool>
-          </property>
-          <property name="currentSection">
-           <enum>QDateTimeEdit::MinuteSection</enum>
-          </property>
-          <property name="displayFormat">
-           <string>mm:ss.zzz</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="freqLabel">
-          <property name="text">
-           <string>Frequency</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="magMax">
-          <property name="suffix">
-           <string> dB</string>
-          </property>
-          <property name="maximum">
-           <number>150</number>
-          </property>
-          <property name="value">
-           <number>150</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
+          <item row="6" column="0">
+           <spacer name="verticalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="dataCaptureBox">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>199</width>
+           <height>459</height>
+          </rect>
+         </property>
+         <attribute name="label">
+          <string>Data Capture</string>
+         </attribute>
+         <layout class="QGridLayout" name="dataCaptureLayout">
+          <item row="4" column="1">
+           <widget class="QTimeEdit" name="elapsedTime">
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="currentSection">
+             <enum>QDateTimeEdit::MinuteSection</enum>
+            </property>
+            <property name="displayFormat">
+             <string>mm:ss.zzz</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="bufferSizeLabel">
+            <property name="text">
+             <string>Buffer</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QSpinBox" name="fps">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>50</number>
+            </property>
+            <property name="value">
+             <number>20</number>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="actualFPSLabel">
+            <property name="text">
+             <string>Actual FPS</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="fpsLabel">
+            <property name="text">
+             <string>Target FPS</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="resolutionHz">
+            <item>
+             <property name="text">
+              <string>0.25 Hz</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>0.5 Hz</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>1.0 Hz</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>2.0 Hz</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>4.0 Hz</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="label">
+            <property name="text">
+             <string>Elapsed</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QSpinBox" name="actualFPS">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="maximum">
+             <number>120</number>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="bufferSize">
+            <property name="suffix">
+             <string> s</string>
+            </property>
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>240</number>
+            </property>
+            <property name="value">
+             <number>30</number>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="resolutionHzLabel">
+            <property name="text">
+             <string>Resolution</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1">
+           <spacer name="verticalSpacer_3">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="sensorConfigBox">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>199</width>
+           <height>459</height>
+          </rect>
+         </property>
+         <attribute name="label">
+          <string>Sensor Config</string>
+         </attribute>
+         <layout class="QGridLayout" name="targetConfigLayout">
+          <item row="2" column="1">
+           <widget class="QToolButton" name="applyTargetButton">
+            <property name="text">
+             <string>...</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QToolButton" name="resetTargetButton">
+            <property name="text">
+             <string>...</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="targetBatchSizeLabel">
+            <property name="text">
+             <string>Batch Size</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="0">
+           <layout class="QVBoxLayout" name="targetGyroLayout">
+            <item>
+             <widget class="QCheckBox" name="targetGyroEnabled">
+              <property name="text">
+               <string>Enabled?</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="targetGyroSens">
+              <item>
+               <property name="text">
+                <string>250</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>500</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>1000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>2000</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="4" column="0">
+           <widget class="QSpinBox" name="targetBatchSize">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>100</number>
+            </property>
+            <property name="value">
+             <number>50</number>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="targetSampleRateLabel">
+            <property name="text">
+             <string>Sample Rate</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="0">
+           <layout class="QVBoxLayout" name="targetAccelerometerLayout">
+            <item>
+             <widget class="QCheckBox" name="targetAccelEnabled">
+              <property name="text">
+               <string>Enabled?</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="targetAccelSens">
+              <item>
+               <property name="text">
+                <string>2</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>4</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>8</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>16</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="7" column="0">
+           <widget class="QLabel" name="gyroLabel">
+            <property name="text">
+             <string>Gyro</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="accelerometerLabel">
+            <property name="text">
+             <string>Accelerometer</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QSpinBox" name="targetSampleRate">
+            <property name="suffix">
+             <string> Hz</string>
+            </property>
+            <property name="minimum">
+             <number>100</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+            <property name="value">
+             <number>500</number>
+            </property>
+           </widget>
+          </item>
+          <item row="9" column="0">
+           <spacer name="verticalSpacer_4">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="recorderStatusBox">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>199</width>
+           <height>459</height>
+          </rect>
+         </property>
+         <attribute name="label">
+          <string>Recorder Status</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="recordersLayout"/>
+        </widget>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="resetButton">
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </item>
@@ -633,240 +904,6 @@
       </item>
      </layout>
     </item>
-    <item>
-     <layout class="QVBoxLayout" name="addRecorderLayout" stretch="0,0,0,0,0,0">
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <item>
-       <widget class="QLabel" name="configHeaderLabel">
-        <property name="font">
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::Box</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Sunken</enum>
-        </property>
-        <property name="text">
-         <string>Target</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <layout class="QGridLayout" name="targetConfigLayout">
-        <item row="2" column="0">
-         <widget class="QLabel" name="accelerometerLabel">
-          <property name="text">
-           <string>Accelerometer</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="targetBatchSize">
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>100</number>
-          </property>
-          <property name="value">
-           <number>50</number>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <layout class="QVBoxLayout" name="targetAccelerometerLayout">
-          <item>
-           <widget class="QCheckBox" name="targetAccelEnabled">
-            <property name="text">
-             <string>Enabled?</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="targetAccelSens">
-            <item>
-             <property name="text">
-              <string>2</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>4</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>8</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>16</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="gyroLabel">
-          <property name="text">
-           <string>Gyro</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <layout class="QVBoxLayout" name="targetGyroLayout">
-          <item>
-           <widget class="QCheckBox" name="targetGyroEnabled">
-            <property name="text">
-             <string>Enabled?</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="targetGyroSens">
-            <item>
-             <property name="text">
-              <string>250</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>500</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>1000</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>2000</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="targetBatchSizeLabel">
-          <property name="text">
-           <string>Batch Size</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="2">
-         <widget class="QToolButton" name="resetTargetButton">
-          <property name="text">
-           <string>...</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2">
-         <widget class="QToolButton" name="applyTargetButton">
-          <property name="text">
-           <string>...</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QSpinBox" name="targetSampleRate">
-          <property name="suffix">
-           <string> Hz</string>
-          </property>
-          <property name="minimum">
-           <number>100</number>
-          </property>
-          <property name="maximum">
-           <number>1000</number>
-          </property>
-          <property name="value">
-           <number>500</number>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="targetSampleRateLabel">
-          <property name="text">
-           <string>Sample Rate</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <widget class="QLabel" name="recordersHeaderLabel">
-        <property name="font">
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::Box</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Sunken</enum>
-        </property>
-        <property name="text">
-         <string>Recorders</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <layout class="QVBoxLayout" name="recordersLayout"/>
-      </item>
-      <item>
-       <spacer name="verticalSpacer">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QPushButton" name="resetButton">
-        <property name="text">
-         <string>Reset</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -1027,10 +1064,6 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>targetSampleRate</tabstop>
-  <tabstop>applyTargetButton</tabstop>
-  <tabstop>targetBatchSize</tabstop>
-  <tabstop>resetTargetButton</tabstop>
   <tabstop>targetAccelEnabled</tabstop>
   <tabstop>targetAccelSens</tabstop>
   <tabstop>targetGyroEnabled</tabstop>
@@ -1040,8 +1073,6 @@
   <tabstop>visibleCurves</tabstop>
   <tabstop>freqMin</tabstop>
   <tabstop>freqMax</tabstop>
-  <tabstop>magMax</tabstop>
-  <tabstop>magMin</tabstop>
   <tabstop>resolutionHz</tabstop>
   <tabstop>bufferSize</tabstop>
   <tabstop>fps</tabstop>

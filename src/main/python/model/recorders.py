@@ -23,8 +23,9 @@ class RecorderSignals(QObject):
 
 class Recorder:
 
-    def __init__(self, idx, buffer_size, parent_layout, parent, target_config, reactor):
+    def __init__(self, ip_address, idx, buffer_size, parent_layout, parent, target_config, reactor):
         ''' Adds widgets to the main screen to display another recorder. '''
+        self.__ip_address = ip_address
         self.__target_config = target_config
         self.signals = RecorderSignals()
         self.__name = None
@@ -35,68 +36,47 @@ class Recorder:
         self.__buffer = self.__make_new_buffer()
         self.__parent_layout = parent_layout
         # init the widgets on screen which control it
-        self.__recorder_layout = QtWidgets.QGridLayout()
+        self.__recorder_layout = QtWidgets.QVBoxLayout()
         self.__recorder_layout.setObjectName(f"recorders_layout_{idx}")
-        self.__connect_button = QtWidgets.QToolButton(parent)
+        self.__connect_button = QtWidgets.QPushButton(parent)
+        self.__connect_button.setText('Connect')
         self.__connect_button.setObjectName(f"connect_recorder_button_{idx}")
         self.__connect_button.clicked.connect(self.connect)
-        self.__recorder_layout.addWidget(self.__connect_button, 0, 2, 1, 1)
-        self.__disconnect_button = QtWidgets.QToolButton(parent)
+        self.__connect_button.setIcon(qta.icon('fa5s.sign-in-alt'))
+        self.__disconnect_button = QtWidgets.QPushButton(parent)
+        self.__disconnect_button.setText('Disconnect')
         self.__disconnect_button.setObjectName(f"disconnect_recorder_button_{idx}")
         self.__disconnect_button.clicked.connect(self.disconnect)
-        self.__recorder_layout.addWidget(self.__disconnect_button, 1, 2, 1, 1)
-        self.__ip_address = QtWidgets.QLineEdit(parent)
-        self.__ip_address.setObjectName(f"ip_address_{idx}")
-        self.__ip_address.textChanged.connect(self.__validate_ip)
-        self.__recorder_layout.addWidget(self.__ip_address, 0, 1, 1, 1)
+        self.__disconnect_button.setIcon(qta.icon('fa5s.sign-out-alt'))
+        self.__disconnect_button.setEnabled(False)
         self.__ip_address_label = QtWidgets.QLabel(parent)
-        self.__ip_address_label.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.__ip_address_label.setObjectName(f"ip_address_label_{idx}")
-        self.__ip_address.setInputMask("000.000.000.000:00000; ")
-        self.__recorder_layout.addWidget(self.__ip_address_label, 0, 0, 1, 1)
-        self.__state_layout = QtWidgets.QHBoxLayout()
-        self.__state_layout.setObjectName(f"state_layout_{idx}")
+        self.__ip_address_label.setObjectName(f"ip_address_{idx}")
+        self.__ip_address_label.setText(ip_address)
         self.__connected = QtWidgets.QCheckBox(parent)
         self.__connected.setObjectName(f"connected_{idx}")
         self.__connected.setText('Connected?')
         self.__connected.setEnabled(False)
-        self.__state_layout.addWidget(self.__connected)
         self.__recording = QtWidgets.QCheckBox(parent)
         self.__recording.setObjectName(f"recording_{idx}")
         self.__recording.setText('Recording?')
         self.__recording.setEnabled(False)
-        self.__state_layout.addWidget(self.__recording)
-        self.__recorder_layout.addLayout(self.__state_layout, 1, 0, 1, 2)
+        self.__button_layout = QtWidgets.QHBoxLayout()
+        self.__recorder_layout.addWidget(self.__ip_address_label)
+        self.__button_layout.addWidget(self.__connect_button)
+        self.__button_layout.addWidget(self.__disconnect_button)
+        self.__recorder_layout.addLayout(self.__button_layout)
+        self.__checkbox_layout = QtWidgets.QHBoxLayout()
+        self.__checkbox_layout.addWidget(self.__connected)
+        self.__checkbox_layout.addWidget(self.__recording)
+        self.__recorder_layout.addLayout(self.__checkbox_layout)
         self.__parent_layout.addLayout(self.__recorder_layout)
-        self.__connect_button.setIcon(qta.icon('fa5s.sign-in-alt'))
-        self.__disconnect_button.setIcon(qta.icon('fa5s.sign-out-alt'))
-
-    def __validate_ip(self, ip):
-        self.__connect_button.setEnabled(self.__is_valid_ip(ip))
-
-    @staticmethod
-    def __is_valid_ip(ip):
-        ''' checks if the string is a valid ip:port. '''
-        tokens = ip.split(':')
-        if len(tokens) == 2:
-            ip_tokens = tokens[0].split('.')
-            if len(ip_tokens) == 4:
-                try:
-                    first, *nums = [int(i) for i in ip_tokens]
-                    if 0 < first <= 255:
-                        if all(0 <= i <= 255 for i in nums):
-                            return 0 < int(tokens[1]) < 65536
-                except Exception as e:
-                    pass
-        return False
 
     def __handle_status_change(self):
         ''' Updates various fields to reflect recorder status. '''
         is_connected = self.__connected.isChecked()
-        self.__ip_address.setEnabled(not is_connected)
         self.__connect_button.setEnabled(not is_connected)
         self.__disconnect_button.setEnabled(is_connected)
-        self.signals.on_status_change.emit(self.__ip_address.text(), is_connected)
+        self.signals.on_status_change.emit(self.ip_address, is_connected)
 
     def __make_new_buffer(self):
         return RingBuffer(self.__target_config.fs * self.__buffer_size,
@@ -115,11 +95,7 @@ class Recorder:
 
     @property
     def ip_address(self):
-        return self.__ip_address.text()
-
-    @ip_address.setter
-    def ip_address(self, ip_address):
-        self.__ip_address.setText(ip_address)
+        return self.__ip_address
 
     @property
     def name(self):
@@ -260,6 +236,10 @@ class RecorderStore(Sequence):
     def __init__(self, target_config, buffer_size_widget, parent_layout, parent, reactor):
         self.signals = RecorderSignals()
         self.__parent_layout = parent_layout
+        self.__spacer_item = QtWidgets.QSpacerItem(20, 40,
+                                                   QtWidgets.QSizePolicy.Minimum,
+                                                   QtWidgets.QSizePolicy.Expanding)
+        self.__parent_layout.addItem(self.__spacer_item)
         self.__parent = parent
         self.__recorders = []
         self.__target_config = target_config
@@ -283,10 +263,12 @@ class RecorderStore(Sequence):
         for r in self:
             r.target_config = target_config
 
-    def append(self):
+    def append(self, ip_address):
         ''' adds a new recorder. '''
-        rec = Recorder(len(self.__recorders), self.__buffer_size, self.__parent_layout, self.__parent,
+        self.__parent_layout.removeItem(self.__spacer_item)
+        rec = Recorder(ip_address, len(self.__recorders), self.__buffer_size, self.__parent_layout, self.__parent,
                        self.__target_config, self.__reactor)
+        self.__parent_layout.addItem(self.__spacer_item)
         rec.signals.on_status_change.connect(self.__on_recorder_connect_event)
         self.__recorders.append(rec)
         return rec
@@ -295,8 +277,7 @@ class RecorderStore(Sequence):
         rec = next((r for r in self if r.ip_address == ip), None)
         if rec is None:
             logger.info(f"Loading new recorder at {ip}")
-            rec = self.append()
-            rec.ip_address = ip
+            rec = self.append(ip)
         rec.replace(data)
 
     def load(self, ip_addresses):
@@ -304,7 +285,7 @@ class RecorderStore(Sequence):
         for ip in ip_addresses:
             if next((r for r in self if r.ip_address == ip), None) is None:
                 logger.info(f"Loading new recorder at {ip}")
-                self.append().ip_address = ip
+                self.append(ip)
         to_remove = [r for r in self if r.ip_address not in ip_addresses]
         for r in to_remove:
             logger.info(f"Discarding recorder from {r.ip_address}")
