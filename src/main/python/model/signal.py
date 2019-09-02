@@ -23,21 +23,21 @@ logger = logging.getLogger('qvibe.signal')
 
 class TriAxisSignal:
 
-    def __init__(self, preferences, recorder_name, data, fs, resolution_shift, idx=-1, mode='vibration',
+    def __init__(self, preferences, measurement_name, data, fs, resolution_shift, idx=-1, mode='vibration',
                  pre_calc=False, view_mode='avg'):
         self.__raw = data
         self.__mode = mode
         self.__view = view_mode
         self.__idx = idx
-        self.__recorder_name = recorder_name
+        self.__measurement_name = measurement_name
         self.__fs = fs
-        self.__x = Signal(recorder_name, 'x', preferences, data[:, 2], fs, resolution_shift, idx=idx,
+        self.__x = Signal(measurement_name, 'x', preferences, data[:, 2], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__y = Signal(recorder_name, 'y', preferences, data[:, 3], fs, resolution_shift, idx=idx,
+        self.__y = Signal(measurement_name, 'y', preferences, data[:, 3], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__z = Signal(recorder_name, 'z', preferences, data[:, 4], fs, resolution_shift, idx=idx,
+        self.__z = Signal(measurement_name, 'z', preferences, data[:, 4], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__sum = SummedSignal(recorder_name, 'sum', preferences, self.__x, self.__y, self.__z, idx=idx,
+        self.__sum = SummedSignal(measurement_name, 'sum', preferences, self.__x, self.__y, self.__z, idx=idx,
                                   pre_calc=pre_calc, view_mode=view_mode)
 
     @staticmethod
@@ -51,17 +51,22 @@ class TriAxisSignal:
         :param view: the active view.
         :return: a TriAxisSignal
         '''
-        name, idx, dtype, fs, dat = str_format.split('#', maxsplit=5)
-        import io
-        raw = np.loadtxt(io.StringIO(dat), dtype=dtype, ndmin=2)
-        return TriAxisSignal(prefs, name, raw, int(fs), shift, idx=int(idx), mode=mode, view_mode=view, pre_calc=True)
+        try:
+            measurement_name, idx, dtype, fs, dat = str_format.split('#', maxsplit=5)
+            import io
+            raw = np.loadtxt(io.StringIO(dat), dtype=dtype, ndmin=2)
+            return TriAxisSignal(prefs, measurement_name, raw, int(fs), shift,
+                                 idx=int(idx), mode=mode, view_mode=view, pre_calc=True)
+        except:
+            logger.exception(f"Unable to decode to signal")
+            return None
 
     def encode(self):
         '''
         encodes the minimal data required to persist this signal
         :return: the signal encoded as a string.
         '''
-        return f"{self.recorder_name}#{self.__idx}#{self.__raw.dtype}#{self.__fs}#{np_to_str(self.__raw)}"
+        return f"{self.measurement_name}#{self.__idx}#{self.__raw.dtype}#{self.__fs}#{np_to_str(self.__raw)}"
 
     @property
     def view(self):
@@ -84,8 +89,8 @@ class TriAxisSignal:
         return self.__x.has_data(view) and self.__y.has_data(view) and self.__z.has_data(view)
 
     @property
-    def recorder_name(self):
-        return self.__recorder_name
+    def measurement_name(self):
+        return self.__measurement_name
 
     @property
     def time(self):
@@ -146,8 +151,8 @@ class Analysis:
 
 
 class AnalysableSignal:
-    def __init__(self, recorder_name, axis, preferences, idx=-1, view_mode='avg'):
-        self.__recorder_name = recorder_name
+    def __init__(self, measurement_name, axis, preferences, idx=-1, view_mode='avg'):
+        self.__measurement_name = measurement_name
         self.__axis = axis
         self.__preferences = preferences
         self.__view_mode = view_mode
@@ -155,8 +160,8 @@ class AnalysableSignal:
         self.__output = {}
 
     @property
-    def recorder_name(self):
-        return self.__recorder_name
+    def measurement_name(self):
+        return self.__measurement_name
 
     @property
     def axis(self):
@@ -213,8 +218,8 @@ class AnalysableSignal:
 
 class SummedSignal(AnalysableSignal):
 
-    def __init__(self, recorder_name, axis, preferences, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
-        super().__init__(recorder_name, axis, preferences, idx=idx, view_mode=view_mode)
+    def __init__(self, measurement_name, axis, preferences, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
+        super().__init__(measurement_name, axis, preferences, idx=idx, view_mode=view_mode)
         self.__x = x
         self.__y = y
         self.__z = z
@@ -249,10 +254,12 @@ def scale_sq(data, scale):
 
 class Signal(AnalysableSignal):
 
-    def __init__(self, recorder_name, axis, preferences, data, fs, resolution_shift, idx=-1, mode='vibration', pre_calc=False,
-                 view_mode='avg'):
+    def __init__(self, measurement_name, axis, preferences, data, fs, resolution_shift,
+                 idx=-1, mode='vibration', pre_calc=False, view_mode='avg'):
         '''
         Creates a new signal.
+        :param measurement_name: the measurement_name.
+        :param axis: the axis.
         :param preferences: common prefs.
         :param data: the sample date.
         :param fs: the sample rate.
@@ -260,7 +267,7 @@ class Signal(AnalysableSignal):
         :param mode: optional analysis mode, can be none (raw data), vibration or tilt.
         :param pre_calc: if True, calculate the required views.
         '''
-        super().__init__(recorder_name, axis, preferences, idx=idx, view_mode=view_mode)
+        super().__init__(measurement_name, axis, preferences, idx=idx, view_mode=view_mode)
         self.__raw_data = data
         self.__data = None
         self.__fs = fs
@@ -299,7 +306,7 @@ class Signal(AnalysableSignal):
         start = time.time()
         self.set_analysis(self.__calculate())
         end = time.time()
-        logger.debug(f"Recalc {self.recorder_name}:{self.axis}:{self.idx} in {to_millis(start, end)}ms")
+        logger.debug(f"Recalc {self.measurement_name}:{self.axis}:{self.idx} in {to_millis(start, end)}ms")
 
     @property
     def fs(self):

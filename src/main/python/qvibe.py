@@ -6,6 +6,7 @@ import sys
 import time
 
 from model.charts import ColourProvider
+from model.measurements import MeasurementStore
 from model.rta import RTA
 from model.save import SaveChartDialog, SaveWavDialog
 from model.spectrogram import Spectrogram
@@ -23,13 +24,13 @@ import qtawesome as qta
 import numpy as np
 
 from qtpy import QtCore
-from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, Qt, QTime
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, QTime
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox, QFileDialog
 from common import block_signals, ReactorRunner, np_to_str
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
-    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX, SNAPSHOT_x
+    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX
 from model.checker import VersionChecker, ReleaseNotesDialog
 from model.log import RollingLogger
 from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
@@ -85,18 +86,17 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.__start_time = None
         self.__target_config = self.__load_config()
         self.__display_target_config()
+        self.__measurement_store = MeasurementStore(self.measurementLayout, self.measurementBox)
+        self.__measurement_store.signals.data_changed.connect(self.__display_measurement)
+        self.__measurement_store.signals.measurement_added.connect(self.__display_measurement)
+        self.__measurement_store.signals.visibility_changed.connect(self.__set_visible_measurements)
         self.__recorder_store = RecorderStore(self.__target_config,
                                               self.bufferSize,
                                               self.recordersLayout,
                                               self.centralwidget,
-                                              self.__reactor)
+                                              self.__reactor,
+                                              self.__measurement_store)
         self.__recorder_store.signals.on_status_change.connect(self.__handle_recorder_connect_event)
-        saved_recorders = self.preferences.get(RECORDER_SAVED_IPS)
-        warn_on_no_recorders = False
-        if saved_recorders is not None:
-            self.__recorder_store.load(saved_recorders.split('|'))
-        else:
-            warn_on_no_recorders = True
         target_resolution = f"{self.preferences.get(ANALYSIS_RESOLUTION)} Hz"
         self.resolutionHz.setCurrentText(target_resolution)
         # menus
@@ -139,7 +139,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
                    self.snapSlotSelector, self.peakHold, self.peakSecs, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
-                           self.activeRecorders, self.visibleCurves),
+                           self.visibleCurves),
         }
         self.__start_analysers()
         self.set_visible_chart(self.chartTabs.currentIndex())
@@ -147,6 +147,13 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.applyTargetButton.setIcon(qta.icon('fa5s.check', color='green'))
         self.resetTargetButton.setIcon(qta.icon('fa5s.undo'))
         self.visibleCurves.selectAll()
+        # load saved recorders
+        saved_recorders = self.preferences.get(RECORDER_SAVED_IPS)
+        warn_on_no_recorders = False
+        if saved_recorders is not None:
+            self.__recorder_store.load(saved_recorders.split('|'))
+        else:
+            warn_on_no_recorders = True
         # show preferences if we have no IPs
         if warn_on_no_recorders is True:
             result = QMessageBox.question(self,
@@ -160,10 +167,35 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.deleteSnapButton.setIcon(qta.icon('fa5s.times'))
         self.zoomInButton.setIcon(qta.icon('fa5s.compress-arrows-alt'))
         self.zoomOutButton.setIcon(qta.icon('fa5s.expand-arrows-alt'))
+        self.loadMeasurementButton.setIcon(qta.icon('fa5s.folder-open'))
         self.actionSave_Signal.triggered.connect(self.__save_signal)
         self.actionLoad_Signal.triggered.connect(self.__load_signal)
+        self.loadMeasurementButton.clicked.connect(self.__load_signal)
+        self.connectAllButton.clicked.connect(self.__recorder_store.connect)
+        self.disconnectAllButton.clicked.connect(self.__recorder_store.disconnect)
+
+    def __set_visible_measurements(self, measurement):
+        '''
+        Propagates the visible measurements to the charts.
+        '''
+        keys = self.__measurement_store.get_visible_measurements()
+        for c in self.__analysers.values():
+            c.set_visible_measurements(keys)
+
+    def __display_measurement(self, measurement):
+        '''
+        Updates the charts with the data from the current measurement.
+        :param measurement: the measurement.
+        '''
+        if measurement.visible is True:
+            if measurement.data is not None:
+                for c in self.__analysers.values():
+                    c.accept(measurement.key, measurement.data, measurement.idx)
+        else:
+            logger.info(f"Hiding {measurement}")
 
     def __save_signal(self):
+        ''' Saves the current data to a file. '''
         dat = {snap[0]: np_to_str(snap[1]) for snap in self.__recorder_store.snap(connected_only=False) if len(snap[1]) > 0}
         if len(dat.keys()) > 0:
             file_name = QFileDialog(self).getSaveFileName(self, 'Save Signal', f"signal.qvibe", "QVibe Signals (*.qvibe)")
@@ -187,22 +219,20 @@ class QVibe(QMainWindow, Ui_MainWindow):
         def parser(file_name):
             with gzip.open(file_name, 'r') as infile:
                 return json.loads(infile.read().decode('utf-8'))
-        input = self.__load('*.qvibe', 'Load Signal', parser)
+        file_name, input = self.__load('*.qvibe', 'Load Signal', parser)
         if input is not None and len(input.keys()) > 0:
-            self.reset_recording()
             for ip, data_txt in input.items():
                 import io
                 data = np.loadtxt(io.StringIO(data_txt), dtype=np.float64, ndmin=2)
-                self.__recorder_store.replace(ip, data)
-                self.__add_recorder(ip)
-            self.__snap_and_push(connected_only=False)
+                self.__measurement_store.add(os.path.basename(file_name)[0:-6], ip, data)
 
     def __load(self, filter, title, parser):
         '''
         Presents a file dialog to the user so they can choose something to load.
-        :return: the loaded thing, if any.
+        :return: a 2 entry tuple with the file name and loaded thing (if anything was loaded)
         '''
         input = None
+        file_name = None
         dialog = QFileDialog(parent=self)
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setNameFilter(filter)
@@ -210,12 +240,16 @@ class QVibe(QMainWindow, Ui_MainWindow):
         if dialog.exec():
             selected = dialog.selectedFiles()
             if len(selected) > 0:
-                input = parser(selected[0])
+                file_name = selected[0]
+                input = parser(file_name)
                 if input is not None:
                     self.statusbar.showMessage(f"Loaded {selected[0]}")
-        return input
+        return file_name, input
 
     def reset_recording(self):
+        '''
+        Wipes all data from the recorders and the charts.
+        '''
         self.__recorder_store.reset()
         for c in self.__analysers.values():
             c.reset()
@@ -240,17 +274,10 @@ class QVibe(QMainWindow, Ui_MainWindow):
         any_connected = self.__recorder_store.any_connected()
         self.fps.setEnabled(not any_connected)
         self.bufferSize.setEnabled(not any_connected)
-        self.__add_recorder(ip)
         if any_connected is True:
             self.__on_start_recording()
         else:
             self.__on_stop_recording()
-
-    def __add_recorder(self, ip):
-        if len(self.activeRecorders.findItems(ip, Qt.MatchExactly)) == 0:
-            self.activeRecorders.addItem(ip)
-            for i in self.activeRecorders.findItems(ip, Qt.MatchExactly):
-                i.setSelected(True)
 
     def __on_start_recording(self):
         '''
@@ -275,16 +302,9 @@ class QVibe(QMainWindow, Ui_MainWindow):
         elapsed = round((time.time() * 1000) - self.__start_time)
         new_time = QTime(0, 0, 0, 0).addMSecs(elapsed)
         self.elapsedTime.setTime(new_time)
-        self.__snap_and_push()
-
-    def __snap_and_push(self, connected_only=True):
-        '''
-        pushes the latest snaps to the analysers.
-        '''
-        for name, signal, count, idx in self.__recorder_store.snap(connected_only=connected_only):
+        for recorder_name, signal, count, idx in self.__recorder_store.snap():
             if count > 0:
-                for c in self.__analysers.values():
-                    c.accept(name, signal, idx)
+                self.__measurement_store.add('rta', recorder_name, signal, idx)
 
     def update_target(self):
         ''' updates the current target config from the UI values. '''
@@ -348,15 +368,9 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         Propagates the visible axes to the charts.
         '''
+        visible = [c.text() for c in self.visibleCurves.selectedItems()]
         for c in self.__analysers.values():
-            c.set_visible_axes([c.text() for c in self.visibleCurves.selectedItems()])
-
-    def set_visible_recorders(self):
-        '''
-        Propagates the visible recorders to the charts.
-        '''
-        for c in self.__analysers.values():
-            c.set_visible_recorders([c.text() for c in self.activeRecorders.selectedItems()])
+            c.set_visible_axes(visible)
 
     def export_chart(self):
         '''

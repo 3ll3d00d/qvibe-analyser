@@ -101,7 +101,7 @@ class Vibration(VisibleChart):
     def __on_analysis_mode_change(self, analysis_mode):
         logger.info(f"Changing analysis mode from {self.analysis_mode} to {analysis_mode}")
         self.analysis_mode = analysis_mode
-        for name in self.cached_recorder_names():
+        for name in self.cached_measurement_names():
             self.cached_data(name).set_mode(self.analysis_mode, recalc=False)
             self.update_chart(name)
 
@@ -123,11 +123,11 @@ class Vibration(VisibleChart):
             self.__legend.removeItem(n)
         self.__plots = {}
 
-    def update_chart(self, recorder_name):
+    def update_chart(self, measurement_name):
         '''
         updates the chart with the latest signal.
         '''
-        d = self.cached_data(recorder_name)
+        d = self.cached_data(measurement_name)
         if d is not None:
             t = (d.time - np.min(d.time))/500
             self.create_or_update(d.x, t)
@@ -136,7 +136,7 @@ class Vibration(VisibleChart):
 
     def create_or_update(self, series, t):
         name = self.__get_plot_name(series)
-        if self.is_visible(recorder=series.recorder_name, axis=series.axis) is True:
+        if self.is_visible(measurement=series.measurement_name, axis=series.axis) is True:
             if name in self.__plots:
                 self.__plots[name].setData(t, series.data)
             else:
@@ -176,4 +176,4 @@ class Vibration(VisibleChart):
 
     @staticmethod
     def __get_plot_name(sig):
-        return f"{sig.recorder_name}:{sig.axis}"
+        return f"{sig.measurement_name}:{sig.axis}"

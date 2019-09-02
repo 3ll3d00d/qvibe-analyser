@@ -233,8 +233,9 @@ class RecorderStore(Sequence):
     '''
     Stores all recorders known to the system.
     '''
-    def __init__(self, target_config, buffer_size_widget, parent_layout, parent, reactor):
+    def __init__(self, target_config, buffer_size_widget, parent_layout, parent, reactor, measurement_store):
         self.signals = RecorderSignals()
+        self.__measurement_store = measurement_store
         self.__parent_layout = parent_layout
         self.__spacer_item = QtWidgets.QSpacerItem(20, 40,
                                                    QtWidgets.QSizePolicy.Minimum,
@@ -286,10 +287,13 @@ class RecorderStore(Sequence):
             if next((r for r in self if r.ip_address == ip), None) is None:
                 logger.info(f"Loading new recorder at {ip}")
                 self.append(ip)
+                self.__measurement_store.add('rta', ip, None)
+
         to_remove = [r for r in self if r.ip_address not in ip_addresses]
         for r in to_remove:
             logger.info(f"Discarding recorder from {r.ip_address}")
             self.__recorders.remove(r)
+            self.__measurement_store.remove('rta', r.ip_address)
             r.destroy()
 
     def clear(self):
@@ -326,6 +330,16 @@ class RecorderStore(Sequence):
         :return: True if any recorded is connected.
         '''
         return any(r.connected is True for r in self)
+
+    def connect(self):
+        ''' connects all recorders '''
+        for r in self:
+            r.connect()
+
+    def disconnect(self):
+        ''' disconnects all recorders '''
+        for r in self:
+            r.disconnect()
 
 
 class RecorderConfig:

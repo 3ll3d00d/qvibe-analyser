@@ -14,8 +14,8 @@ logger = logging.getLogger('qvibe.rta')
 
 class RTAEvent(ChartEvent):
 
-    def __init__(self, chart, recorder_name, input, idx, preferences, budget_millis, view, visible):
-        super().__init__(chart, recorder_name, input, idx, preferences, budget_millis)
+    def __init__(self, chart, measurement_name, input, idx, preferences, budget_millis, view, visible):
+        super().__init__(chart, measurement_name, input, idx, preferences, budget_millis)
         self.__view = view
         self.__visible = visible
 
@@ -24,9 +24,6 @@ class RTAEvent(ChartEvent):
         self.output.set_view(self.__view, recalc=False)
         if self.input.shape[0] >= self.chart.min_nperseg and self.__visible:
             self.output.recalc()
-            self.should_emit = True
-        else:
-            self.should_emit = False
 
 
 class RTA(VisibleChart):
@@ -124,14 +121,11 @@ class RTA(VisibleChart):
 
     def __load_snapshot(self, idx):
         stored = self.preferences.get(SNAPSHOT_x % idx)
-        return {
-            k: TriAxisSignal.decode(self.preferences,
-                                    self.resolution_shift,
-                                    v,
-                                    self.analysis_mode,
-                                    self.__active_view)
+        loaded = {
+            k: TriAxisSignal.decode(self.preferences, self.resolution_shift, v, self.analysis_mode, self.__active_view)
             for k, v in stored.items()
         }
+        return {k: v for k, v in loaded.items() if v is not None}
 
     def __save_snapshot(self, snapshot_id, snapshot_button, snapshot_action, delete_snapshot_button):
         '''
@@ -140,7 +134,7 @@ class RTA(VisibleChart):
         :param snapshot_button: the button.
         :param delete_snapshot_button: the delete button.
         '''
-        data = {name: self.cached_data(name)[-1].encode() for name in self.cached_recorder_names()}
+        data = {name: self.cached_data(name)[-1].encode() for name in self.cached_measurement_names()}
         self.preferences.set(SNAPSHOT_x % snapshot_id, data)
         delete_snapshot_button.setEnabled(True)
         self.__enable_snapshot_button(snapshot_button, snapshot_action, data)
@@ -240,10 +234,10 @@ class RTA(VisibleChart):
         if self.__average is not None:
             self.__on_average_change(self.__average)
 
-    def make_event(self, recorder_name, data, idx):
+    def make_event(self, measurement_name, data, idx):
         '''
         Creates an RTAEvent to pass to the analysis thread.
-        :param recorder_name: the recorder from which the data came.
+        :param measurement_name: the measurement the data came from.
         :param data: the data to analyse.
         :param idx: the index of the data set.
         '''
@@ -251,8 +245,8 @@ class RTA(VisibleChart):
             d = data
         else:
             d = data[-self.__average_samples:]
-        return RTAEvent(self, recorder_name, d, idx, self.preferences, self.budget_millis, self.__active_view,
-                        self.visible)
+        return RTAEvent(self, measurement_name, d, idx, self.preferences, self.budget_millis,
+                        self.__active_view, self.visible)
 
     def reset_chart(self):
         '''
@@ -262,12 +256,12 @@ class RTA(VisibleChart):
             self.__chart.removeItem(c)
         self.__plots = {}
 
-    def update_chart(self, recorder_name):
+    def update_chart(self, measurement_name):
         '''
         Updates all the curves for the named recorder with the latest data and config.
-        :param recorder_name: the recorder.
+        :param measurement_name: the recorder.
         '''
-        data = self.cached_data(recorder_name)
+        data = self.cached_data(measurement_name)
         if data is not None and len(data) > 0:
             self.__display_triaxis_signal(data[-1])
             self.render_peak(data, 'x')
@@ -331,7 +325,7 @@ class RTA(VisibleChart):
                 y_data = np.maximum.reduce(data_)
                 x_data = has_data.x
             pen_args = {'style': Qt.DashLine}
-        self.__manage_plot_item(f"{sig.recorder_name}:{sig.axis}:peak", data[-1].idx, sig.recorder_name, sig.axis,
+        self.__manage_plot_item(f"{sig.measurement_name}:{sig.axis}:peak", data[-1].idx, sig.measurement_name, sig.axis,
                                 x_data, y_data, pen_args)
 
     def render_signal(self, data, axis, plot_name_prefix=''):
@@ -349,15 +343,15 @@ class RTA(VisibleChart):
             y_data = view.y
             x_data = view.x
         pen_args = {'style': Qt.SolidLine}
-        plot_name = f"{plot_name_prefix}{sig.recorder_name}:{sig.axis}"
-        self.__manage_plot_item(plot_name, data.idx, sig.recorder_name, sig.axis, x_data, y_data, pen_args)
+        plot_name = f"{plot_name_prefix}{sig.measurement_name}:{sig.axis}"
+        self.__manage_plot_item(plot_name, data.idx, sig.measurement_name, sig.axis, x_data, y_data, pen_args)
 
-    def __manage_plot_item(self, name, idx, recorder_name, axis, x_data, y_data, pen_args):
+    def __manage_plot_item(self, name, idx, measurement_name, axis, x_data, y_data, pen_args):
         '''
         Creates or updates a plot item or removes it.
         :param name: plot name.
         :param idx: the underlying signal index.
-        :param recorder_name: the originating recorder.
+        :param measurement_name: the originating measurement.
         :param axis: the axis for which this data is for.
         :param x_data: x data.
         :param y_data: y data.
@@ -365,7 +359,7 @@ class RTA(VisibleChart):
         '''
         if y_data is not None:
             logger.debug(f"Tick {idx} {np.min(y_data):.4f} - {np.max(y_data):.4f} - {len(y_data)} ")
-            self.__show_or_remove_analysis(name, recorder_name, axis, x_data, y_data, pen_args if pen_args else {})
+            self.__show_or_remove_analysis(name, measurement_name, axis, x_data, y_data, pen_args if pen_args else {})
         elif name in self.__plots:
             self.__remove_named_plot(name)
 
@@ -378,18 +372,18 @@ class RTA(VisibleChart):
         del self.__plots[name]
         self.__legend.removeItem(name)
 
-    def __show_or_remove_analysis(self, plot_name, recorder_name, axis, x_data, y_data, pen_args):
+    def __show_or_remove_analysis(self, plot_name, measurement_name, axis, x_data, y_data, pen_args):
         '''
         If the series should be visible, creates or updates a PlotItem with the x and y data.
         If the series should not be visible, removes the PlotItem if it is displayed atm.
         :param plot_name: plot name.
-        :param recorder_name: the recorder name.
+        :param measurement_name: the measurement name.
         :param axis: the axis.
         :param x_data: x data.
         :param y_data: y data.
         :param pen_args: the description of the pen.
         '''
-        if self.is_visible(recorder=recorder_name, axis=axis) is True:
+        if self.is_visible(measurement=measurement_name, axis=axis) is True:
             y = smooth_savgol(x_data, y_data)[1] if self.__smooth is True else y_data
             if plot_name in self.__plots:
                 self.__plots[plot_name].setData(x_data, y)
