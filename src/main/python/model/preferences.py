@@ -50,7 +50,7 @@ SUM_Z_SCALE = 'sum/z_scale'
 
 WAV_DOWNLOAD_DIR = 'wav/download_dir'
 
-SNAPSHOT_x = 'snapshot/save_%d'
+SNAPSHOT_GROUP = 'snapshot'
 
 DEFAULT_PREFS = {
     ANALYSIS_RESOLUTION: 1.0,
@@ -133,6 +133,15 @@ class Preferences:
             return self.__settings.value(key, defaultValue=default_value, type=value_type)
         else:
             return self.__settings.value(key, defaultValue=default_value)
+
+    def enter(self, key):
+        self.__settings.beginGroup(key)
+
+    def get_children(self):
+        return self.__settings.childKeys()
+
+    def exit(self):
+        self.__settings.endGroup()
 
     def get_all(self, prefix):
         '''

@@ -5,9 +5,9 @@ from collections import Sequence
 
 import numpy as np
 import qtawesome as qta
-from qtpy.QtWidgets import QMessageBox
-from qtpy import QtWidgets, QtCore
+from qtpy import QtWidgets
 from qtpy.QtCore import QObject, Signal, QThreadPool
+from qtpy.QtWidgets import QMessageBox
 from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 

@@ -1,8 +1,11 @@
 import logging
 
+import numpy as np
+import qtawesome as qta
 from qtpy import QtWidgets, QtCore
 from qtpy.QtCore import QObject, Signal
-import qtawesome as qta
+
+from model.preferences import SNAPSHOT_GROUP
 
 logger = logging.getLogger('qvibe.measurements')
 
@@ -15,8 +18,9 @@ class MeasurementStoreSignals(QObject):
 
 
 class MeasurementStore:
-    def __init__(self, parent_layout, parent_widget):
+    def __init__(self, parent_layout, parent_widget, preferences):
         self.signals = MeasurementStoreSignals()
+        self.preferences = preferences
         self.__parent_layout = parent_layout
         self.__parent_widget = parent_widget
         self.__measurements = []
@@ -29,11 +33,27 @@ class MeasurementStore:
     def __iter__(self):
         return iter(self.__measurements)
 
+    def load_snapshots(self):
+        '''
+        Loads snapshots from preferences into the measurement store.
+        '''
+        self.preferences.enter(SNAPSHOT_GROUP)
+        for id in self.preferences.get_children():
+            self.preferences.enter(id)
+            for ip in self.preferences.get_children():
+                import io
+                self.add_snapshot(id, ip, np.loadtxt(io.StringIO(self.preferences.get(ip)), dtype=np.float64, ndmin=2))
+            self.preferences.exit()
+        self.preferences.exit()
+
     def get_visible_measurements(self):
         '''
         :return: the key for each visible measurement.
         '''
         return [m.key for m in self.__measurements if m.visible is True]
+
+    def add_snapshot(self, id, ip, data):
+        self.add(f"snapshot{id}", ip, data)
 
     def add(self, name, ip, data, data_idx=-1):
         '''
@@ -83,6 +103,8 @@ class MeasurementStore:
             ui.delete()
             self.__uis.append(ui)
             self.signals.measurement_deleted.emit(m)
+            if measurement.name.startswith('snapshot'):
+                self.preferences.clear(f"{SNAPSHOT_GROUP}/{m.name[8:]}/{m.ip}")
 
 
 class Measurement:

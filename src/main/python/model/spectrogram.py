@@ -24,7 +24,7 @@ class SpectrogramEvent(ChartEvent):
 
     def __make_sig(self, chunk):
         return TriAxisSignal(self.preferences,
-                             self.key,
+                             self.measurement_name,
                              chunk,
                              self.chart.fs,
                              self.chart.resolution_shift,

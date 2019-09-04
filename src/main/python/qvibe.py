@@ -24,15 +24,15 @@ import qtawesome as qta
 import numpy as np
 
 from qtpy import QtCore
-from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, QTime
+from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, QTime, QRunnable, QThread
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox, QFileDialog
 from common import block_signals, ReactorRunner, np_to_str
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
-    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX
+    CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX, SNAPSHOT_GROUP
 from model.checker import VersionChecker, ReleaseNotesDialog
-from model.log import RollingLogger
+from model.log import RollingLogger, to_millis
 from model.preferences import RECORDER_TARGET_FS, RECORDER_TARGET_SAMPLES_PER_BATCH, RECORDER_TARGET_ACCEL_ENABLED, \
     RECORDER_TARGET_ACCEL_SENS, RECORDER_TARGET_GYRO_ENABLED, RECORDER_TARGET_GYRO_SENS, RECORDER_SAVED_IPS
 from ui.app import Ui_MainWindow
@@ -43,9 +43,7 @@ logger = logging.getLogger('qvibe')
 
 
 class QVibe(QMainWindow, Ui_MainWindow):
-    '''
-    The main UI.
-    '''
+    snapshot_saved = QtCore.Signal(int, str, object)
 
     def __init__(self, app, prefs, parent=None):
         super(QVibe, self).__init__(parent)
@@ -64,29 +62,28 @@ class QVibe(QMainWindow, Ui_MainWindow):
                 self.__version = version_file.read().strip()
         except:
             logger.exception(f"Unable to read {v_path}")
+        global_thread_pool = QThreadPool.globalInstance()
+        global_thread_pool.setMaxThreadCount(QThread.idealThreadCount() + 4)
         if self.preferences.get(SYSTEM_CHECK_FOR_UPDATES):
-            QThreadPool.globalInstance().start(VersionChecker(self.preferences.get(SYSTEM_CHECK_FOR_BETA_UPDATES),
-                                                              self.__alert_on_old_version,
-                                                              self.__alert_on_version_check_fail,
-                                                              self.__version))
+            global_thread_pool.start(VersionChecker(self.preferences.get(SYSTEM_CHECK_FOR_BETA_UPDATES),
+                                          self.__alert_on_old_version,
+                                          self.__alert_on_version_check_fail,
+                                          self.__version))
         # UI initialisation
         self.setupUi(self)
         # run a twisted reactor as its responsiveness is embarrassingly better than QTcpSocket
         from twisted.internet import reactor
         self.__reactor = reactor
         runner = ReactorRunner(self.__reactor)
-        QThreadPool.globalInstance().reserveThread()
-        QThreadPool.globalInstance().start(runner)
+        global_thread_pool.reserveThread()
+        global_thread_pool.start(runner)
         self.app.aboutToQuit.connect(runner.stop)
-        # snapshot loaders
-        self.__snapshot_buttons = [self.snap1, self.snap2, self.snap3]
-        self.__snapshot_actions = [self.actionToggle_1, self.actionToggle_2, self.actionToggle_3]
         # core domain stores
         self.__timer = None
         self.__start_time = None
         self.__target_config = self.__load_config()
         self.__display_target_config()
-        self.__measurement_store = MeasurementStore(self.measurementLayout, self.measurementBox)
+        self.__measurement_store = MeasurementStore(self.measurementLayout, self.measurementBox, self.preferences)
         self.__measurement_store.signals.data_changed.connect(self.__display_measurement)
         self.__measurement_store.signals.measurement_added.connect(self.__display_measurement)
         self.__measurement_store.signals.visibility_changed.connect(self.__set_visible_measurements)
@@ -135,8 +132,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
                          self.findPeaksButton, colour_provider),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.rtaAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
-                   self.__snapshot_buttons, self.__snapshot_actions, self.snapButton, self.deleteSnapButton,
-                   self.snapSlotSelector, self.peakHold, self.peakSecs, colour_provider),
+                   self.peakHold, self.peakSecs, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.visibleCurves),
@@ -163,8 +159,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
                                           QMessageBox.No)
             if result == QMessageBox.Yes:
                 self.show_preferences()
-        self.snapButton.setIcon(qta.icon('fa5s.save'))
-        self.deleteSnapButton.setIcon(qta.icon('fa5s.times'))
+        self.saveSnapshotButton.setIcon(qta.icon('fa5s.save'))
+        self.saveSnapshotButton.clicked.connect(self.__save_snapshot)
         self.zoomInButton.setIcon(qta.icon('fa5s.compress-arrows-alt'))
         self.zoomOutButton.setIcon(qta.icon('fa5s.expand-arrows-alt'))
         self.loadMeasurementButton.setIcon(qta.icon('fa5s.folder-open'))
@@ -173,6 +169,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.loadMeasurementButton.clicked.connect(self.__load_signal)
         self.connectAllButton.clicked.connect(self.__recorder_store.connect)
         self.disconnectAllButton.clicked.connect(self.__recorder_store.disconnect)
+        self.snapshot_saved.connect(self.__add_snapshot)
+        self.__measurement_store.load_snapshots()
 
     def __set_visible_measurements(self, measurement):
         '''
@@ -194,9 +192,19 @@ class QVibe(QMainWindow, Ui_MainWindow):
         else:
             logger.info(f"Hiding {measurement}")
 
+    def __save_snapshot(self):
+        ''' Triggers the snapshot save job. '''
+        runner = SnapshotSaver(int(self.snapSlotSelector.currentText()), self.preferences,
+                               lambda: self.__capture_snap(convert=False), self.__measurement_store,
+                               self.snapshot_saved)
+        QThreadPool.globalInstance().start(runner)
+
+    def __add_snapshot(self, id, ip, data):
+        self.__measurement_store.add_snapshot(id, ip, data)
+
     def __save_signal(self):
         ''' Saves the current data to a file. '''
-        dat = {snap[0]: np_to_str(snap[1]) for snap in self.__recorder_store.snap(connected_only=False) if len(snap[1]) > 0}
+        dat = self.__capture_snap()
         if len(dat.keys()) > 0:
             file_name = QFileDialog(self).getSaveFileName(self, 'Save Signal', f"signal.qvibe", "QVibe Signals (*.qvibe)")
             file_name = str(file_name[0]).strip()
@@ -210,6 +218,10 @@ class QVibe(QMainWindow, Ui_MainWindow):
             msg_box.setIcon(QMessageBox.Warning)
             msg_box.setWindowTitle('Nothing to Save')
             msg_box.exec()
+
+    def __capture_snap(self, convert=True):
+        ''' Snaps the available data into for saving. '''
+        return {s[0]: np_to_str(s[1]) if convert is True else s[1] for s in self.__recorder_store.snap(connected_only=False) if len(s[1]) > 0}
 
     def __load_signal(self):
         '''
@@ -465,6 +477,46 @@ class QVibe(QMainWindow, Ui_MainWindow):
         msg_box.setIcon(QMessageBox.Information)
         msg_box.setWindowTitle('About')
         msg_box.exec()
+
+
+class SnapshotSaver(QRunnable):
+
+    def __init__(self, id, preferences, capturer, store, signal):
+        super().__init__()
+        self.__id = id
+        self.__preferences = preferences
+        self.__capturer = capturer
+        self.__store = store
+        self.__signal = signal
+
+    def run(self):
+        '''
+        Saves the snapshot to preferences.
+        '''
+        start = time.time()
+        dat = self.__capturer()
+        logger.info(f"Captured in {to_millis(start, time.time())}ms")
+        prefs = []
+        if len(dat.keys()) > 0:
+            for ip, v in dat.items():
+                prefs.append(SetPreference(self.__preferences, f"{SNAPSHOT_GROUP}/{self.__id}/{ip}", v))
+                self.__signal.emit(self.__id, ip, v)
+        for p in prefs:
+            QThreadPool.globalInstance().start(p, priority=-1)
+        logger.info(f"Saved snapshot in {to_millis(start, time.time())}ms")
+
+
+class SetPreference(QRunnable):
+    def __init__(self, prefs, key, val):
+        super().__init__()
+        self.prefs = prefs
+        self.key = key
+        self.val = val
+
+    def run(self):
+        start = time.time()
+        self.prefs.set(self.key, np_to_str(self.val))
+        logger.info(f"Set preference in {to_millis(start, time.time())}ms")
 
 
 def make_app():
