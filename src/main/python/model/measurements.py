@@ -1,10 +1,14 @@
+import gzip
+import json
 import logging
 
 import numpy as np
 import qtawesome as qta
 from qtpy import QtWidgets, QtCore
+from qtpy.QtWidgets import QFileDialog
 from qtpy.QtCore import QObject, Signal
 
+from common import np_to_str
 from model.preferences import SNAPSHOT_GROUP
 
 logger = logging.getLogger('qvibe.measurements')
@@ -74,7 +78,7 @@ class MeasurementStore:
                 ui = self.__uis[len(self.__measurements) - 1]
                 ui.render(m)
             else:
-                ui = MeasurementUI(self.__parent_layout, self.__parent_widget, self.__delete)
+                ui = MeasurementUI(self.__parent_layout, self.__parent_widget, self.__delete, self.__export)
                 ui.render(m)
                 self.__uis.append(ui)
             self.__parent_layout.addItem(self.__spacer_item)
@@ -105,6 +109,17 @@ class MeasurementStore:
             self.signals.measurement_deleted.emit(m)
             if measurement.name.startswith('snapshot'):
                 self.preferences.clear(f"{SNAPSHOT_GROUP}/{m.name[8:]}/{m.ip}")
+
+    def __export(self, measurement):
+        '''
+        Exports the measurement to a file.
+        :param measurement: the measurement.
+        '''
+        file_name = QFileDialog.getSaveFileName(caption='Export Signal', directory=f"{measurement.name}.qvibe", filter="QVibe Signals (*.qvibe)")
+        file_name = str(file_name[0]).strip()
+        if len(file_name) > 0:
+            with gzip.open(file_name, 'wb+') as outfile:
+                outfile.write(json.dumps({measurement.ip: np_to_str(measurement.data)}).encode('utf-8'))
 
 
 class Measurement:
@@ -161,9 +176,10 @@ class Measurement:
 
 
 class MeasurementUI:
-    def __init__(self, parent_layout, parent_widget, delete_func):
+    def __init__(self, parent_layout, parent_widget, delete_func, export_func):
         self.__measurement = None
         self.__delete_func = delete_func
+        self.__export_func = export_func
         self.__parent_layout = parent_layout
         self.__parent_widget = parent_widget
         self.__frame = QtWidgets.QFrame(self.__parent_widget)
@@ -173,9 +189,10 @@ class MeasurementUI:
         self.__visible_button = QtWidgets.QPushButton(self.__frame)
         self.__visible_button.setText('Show Data')
         self.__visible_button.setCheckable(True)
-        self.__delete_button = QtWidgets.QPushButton(self.__frame)
-        self.__delete_button.setText('Delete')
+        self.__delete_button = QtWidgets.QToolButton(self.__frame)
         self.__delete_button.setIcon(qta.icon('fa5s.times', color='red'))
+        self.__export_button = QtWidgets.QToolButton(self.__frame)
+        self.__export_button.setIcon(qta.icon('fa5s.download'))
         self.__button_layout = QtWidgets.QHBoxLayout()
         self.__label = QtWidgets.QLabel(self.__frame)
         self.__label.setAlignment(QtCore.Qt.AlignCenter)
@@ -183,6 +200,7 @@ class MeasurementUI:
         self.__layout.addLayout(self.__button_layout)
         self.__button_layout.addWidget(self.__visible_button)
         self.__button_layout.addWidget(self.__delete_button)
+        self.__button_layout.addWidget(self.__export_button)
         self.__frame.setVisible(False)
         self.__parent_layout.addWidget(self.__frame)
 
@@ -197,13 +215,18 @@ class MeasurementUI:
         if self.__measurement != measurement:
             self.__visible_button.disconnect()
             self.__delete_button.disconnect()
+            self.__export_button.disconnect()
 
             def set_viz(t):
                 measurement.visible = t
             self.__visible_button.toggled[bool].connect(set_viz)
             if measurement.visible is True:
                 self.__visible_button.setChecked(True)
-            self.__delete_button.setEnabled(measurement.name != 'rta')
+            self.__delete_button.setVisible(measurement.name != 'rta')
+            is_snapshot = measurement.name.startswith('snapshot')
+            self.__export_button.setVisible(is_snapshot)
+            self.__export_button.setEnabled(is_snapshot)
+            self.__export_button.clicked.connect(lambda: self.__export_func(measurement))
             self.__label.setText(measurement.key)
             self.__delete_button.clicked.connect(lambda: self.__delete_func(measurement))
 

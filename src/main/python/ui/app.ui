@@ -86,14 +86,14 @@
            </widget>
           </item>
           <item>
+           <widget class="QLabel" name="saveSnapshotLabel">
+            <property name="text">
+             <string>Snapshots</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <layout class="QHBoxLayout" name="snapshotLayout">
-            <item>
-             <widget class="QLabel" name="saveSnapshotLabel">
-              <property name="text">
-               <string>Snapshots: </string>
-              </property>
-             </widget>
-            </item>
             <item>
              <widget class="QToolButton" name="saveSnapshotButton"/>
             </item>
@@ -616,7 +616,7 @@
       <item row="0" column="0">
        <widget class="QTabWidget" name="chartTabs">
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="vibrationTab">
          <attribute name="title">
