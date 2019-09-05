@@ -135,7 +135,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
                    self.peakHold, self.peakSecs, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
-                           self.visibleCurves),
+                           self.visibleCurves, self.__measurement_store),
         }
         self.__start_analysers()
         self.set_visible_chart(self.chartTabs.currentIndex())

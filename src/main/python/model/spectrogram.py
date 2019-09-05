@@ -37,25 +37,25 @@ class SpectrogramEvent(ChartEvent):
 class Spectrogram(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, buffer_size_widget,
-                 mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget, active_signals_widget):
+                 mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget, active_signals_widget,
+                 measurement_store):
         self.__sens = None
         self.__buffer_size = None
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, True)
+        self.__rows = 0
         self.__series = {}
         self.__staging = None
         self.__buffers = {}
         self.__last_idx = {}
-        self.__recorders = []
         self.__scale_factor = None
         self.__scale_algo = None
 
         self.__qview = chart
         self.__mag_min = lambda: mag_min_widget.value()
         self.__mag_max = lambda: mag_max_widget.value()
-        # self.__all_recorders = active_recorders_widget
+        self.__measurement_store = measurement_store
         self.__all_signals = active_signals_widget
 
-        # self.__visible_recorders = lambda: [i.text() for i in active_recorders_widget.selectedItems()]
         self.__visible_signals = lambda: [i.text() for i in active_signals_widget.selectedItems()]
         mag_min_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
         mag_max_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
@@ -67,7 +67,9 @@ class Spectrogram(VisibleChart):
         self.update_scale()
         self.__on_buffer_size_change(buffer_size_widget.value())
         self.__reset_limits()
-        # active_recorders_widget.itemSelectionChanged.connect(self.__change_row_viz)
+        self.__measurement_store.signals.measurement_added.connect(lambda m: self.__create_charts(m.key))
+        self.__measurement_store.signals.measurement_deleted.connect(lambda m: self.__remove_charts(m.key))
+        self.__measurement_store.signals.visibility_changed.connect(self.__change_row_viz)
         active_signals_widget.itemSelectionChanged.connect(self.__change_column_viz)
 
     def update_scale(self):
@@ -84,20 +86,12 @@ class Spectrogram(VisibleChart):
                 for c in self.__series.values():
                     self.__qview.removeItem(c[0])
                 self.__series = {}
-                # self.__change_row_viz()
 
-    def __change_row_viz(self):
-        for i in range(0, self.__all_recorders.count()):
-            name = self.__all_recorders.item(i).text()
-            visible = name in self.__visible_recorders()
-            found = False
-            for k, v in self.__series.items():
-                if k.startswith(name):
-                    logger.info(f"Setting {k} visible to {visible} at row {i}")
-                    v[0].setVisible(visible)
-                    found = True
-            if found is not True:
-                self.__create_charts(name)
+    def __change_row_viz(self, measurement):
+        for k, v in self.__series.items():
+            if k.startswith(f"{measurement.key}:"):
+                logger.info(f"Changing {k} visibility to {measurement.visible}")
+                v[0].setVisible(measurement.visible)
         self.__qview.resizeEvent(None)
 
     def __change_column_viz(self):
@@ -110,12 +104,23 @@ class Spectrogram(VisibleChart):
                     v[0].setVisible(visible)
         self.__qview.resizeEvent(None)
 
-    def __create_charts(self, recorder):
-        self.__series[f"{recorder}:x"] = self.__init_img(recorder, 'x', len(self.__recorders), 0)
-        self.__series[f"{recorder}:y"] = self.__init_img(recorder, 'y', len(self.__recorders), 1)
-        self.__series[f"{recorder}:z"] = self.__init_img(recorder, 'z', len(self.__recorders), 2)
+    def __create_charts(self, measurement_name):
+        ''' Creates a new set of charts for the named measurement. '''
+        self.__series[f"{measurement_name}:x"] = self.__init_img(measurement_name, 'x', self.__rows, 0)
+        self.__series[f"{measurement_name}:y"] = self.__init_img(measurement_name, 'y', self.__rows, 1)
+        self.__series[f"{measurement_name}:z"] = self.__init_img(measurement_name, 'z', self.__rows, 2)
+        self.__rows += 1
         self.__reset_limits()
-        self.__recorders.append(recorder)
+
+    def __remove_charts(self, measurement_name):
+        '''
+        Hides the images at the specified row.
+        :param measurement_name: the name.
+        '''
+        for k, v in self.__series.items():
+            if k.startswith(f"{measurement_name}:"):
+                v[0].setVisible(False)
+        self.__qview.resizeEvent(None)
 
     def __on_mag_limit_change(self, val):
         for ax in self.__series.values():
@@ -125,10 +130,10 @@ class Spectrogram(VisibleChart):
         for ax in self.__series.values():
             ax[0].setXRange(self.__freq_min(), self.__freq_max(), padding=0)
 
-    def __init_img(self, recorder, axis, row, column):
+    def __init_img(self, measurement, axis, row, column):
         # initialise a buffer
         meta = self.__get_meta()
-        self.__buffers[f"{recorder}:{axis}"] = np.zeros(meta.sxx.T.shape)
+        self.__buffers[f"{measurement}:{axis}"] = np.zeros(meta.sxx.T.shape)
         from qvibe import Inverse
         kargs = {'row': row, 'col': column}
         if row == 0:
@@ -169,7 +174,6 @@ class Spectrogram(VisibleChart):
             self.__qview.removeItem(c[0])
         self.__series = {}
         self.__buffers = {}
-        self.__recorders = []
         self.__change_row_viz()
 
     def __get_meta(self):
@@ -187,14 +191,14 @@ class Spectrogram(VisibleChart):
         updates the chart with the latest signal.
         '''
         if self.__staging is not None:
-            if measurement_name in self.__visible_recorders():
+            if measurement_name in self.__measurement_store.get_visible_measurements():
                 self.create_or_update(self.__staging, measurement_name, 'x')
                 self.create_or_update(self.__staging, measurement_name, 'y')
                 self.create_or_update(self.__staging, measurement_name, 'z')
 
-    def create_or_update(self, chunks, recorder, axis):
+    def create_or_update(self, chunks, measurement_name, axis):
         c_idx = len(chunks)
-        buf = self.__buffers[f"{recorder}:{axis}"]
+        buf = self.__buffers[f"{measurement_name}:{axis}"]
         buf = np.roll(buf, c_idx, 0)
         for idx, c in enumerate(chunks):
             dat = getattr(c, axis)
@@ -202,15 +206,15 @@ class Spectrogram(VisibleChart):
                 dat.recalc()
             sxx = dat.get_analysis().sxx
             buf[c_idx-idx-1] = sxx.T
-        self.__buffers[f"{recorder}:{axis}"] = buf
+        self.__buffers[f"{measurement_name}:{axis}"] = buf
         buf = np.array(Image.fromarray(buf).resize(size=[i*self.__scale_factor for i in buf.shape[::-1]],
                                                    resample=self.__scale_algo))
-        self.__series[f"{recorder}:{axis}"][1].setImage(buf.T, autoLevels=False)
+        self.__series[f"{measurement_name}:{axis}"][1].setImage(buf.T, autoLevels=False)
 
     def make_event(self, measurement_name, data, idx):
         '''
         reduces the data down to the fresh nperseg sized chunks.
-        :param measurement_name: the recorder.
+        :param measurement_name: the measurement name.
         :param data: the data.
         :param idx: the snap idx.
         :return: the event if we have more than min_nperseg samples.
