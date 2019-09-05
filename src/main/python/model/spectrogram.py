@@ -37,7 +37,7 @@ class SpectrogramEvent(ChartEvent):
 class Spectrogram(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, fps_widget, actual_fps_widget, resolution_widget, buffer_size_widget,
-                 mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget, active_signals_widget,
+                 mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget, visible_axes_widget,
                  measurement_store):
         self.__sens = None
         self.__buffer_size = None
@@ -54,9 +54,9 @@ class Spectrogram(VisibleChart):
         self.__mag_min = lambda: mag_min_widget.value()
         self.__mag_max = lambda: mag_max_widget.value()
         self.__measurement_store = measurement_store
-        self.__all_signals = active_signals_widget
+        self.__all_axes = visible_axes_widget
 
-        self.__visible_signals = lambda: [i.text() for i in active_signals_widget.selectedItems()]
+        self.__visible_axes = lambda: [i.text() for i in visible_axes_widget.selectedItems()]
         mag_min_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
         mag_max_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
         self.__freq_min = lambda: freq_min_widget.value()
@@ -70,7 +70,7 @@ class Spectrogram(VisibleChart):
         self.__measurement_store.signals.measurement_added.connect(lambda m: self.__create_charts(m.key))
         self.__measurement_store.signals.measurement_deleted.connect(lambda m: self.__remove_charts(m.key))
         self.__measurement_store.signals.visibility_changed.connect(self.__change_row_viz)
-        active_signals_widget.itemSelectionChanged.connect(self.__change_column_viz)
+        visible_axes_widget.itemSelectionChanged.connect(self.__change_column_viz)
 
     def update_scale(self):
         '''
@@ -88,20 +88,28 @@ class Spectrogram(VisibleChart):
                 self.__series = {}
 
     def __change_row_viz(self, measurement):
+        visible_axes = self.__visible_axes()
         for k, v in self.__series.items():
             if k.startswith(f"{measurement.key}:"):
                 logger.info(f"Changing {k} visibility to {measurement.visible}")
-                v[0].setVisible(measurement.visible)
+                if measurement.visible is True and len([m for m in visible_axes if k.endswith(f":{m}")]) > 0:
+                    v[0].setVisible(measurement.visible)
+                else:
+                    v[0].setVisible(False)
         self.__qview.resizeEvent(None)
 
     def __change_column_viz(self):
-        for i in range(0, self.__all_signals.count()):
-            name = self.__all_signals.item(i).text()
-            visible = name in self.__visible_signals()
+        visible_measurements = self.__measurement_store.get_visible_measurements()
+        for i in range(0, self.__all_axes.count()):
+            name = self.__all_axes.item(i).text()
+            visible = name in self.__visible_axes()
             for k, v in self.__series.items():
                 if k.endswith(f":{name}"):
-                    logger.info(f"Setting {k} visible to {visible} at column {i}")
-                    v[0].setVisible(visible)
+                    if visible is True and len([m for m in visible_measurements if k.startswith(f"{m}:")]) > 0:
+                        logger.info(f"Setting {k} visible to {visible} at column {i}")
+                        v[0].setVisible(visible)
+                    else:
+                        v[0].setVisible(False)
         self.__qview.resizeEvent(None)
 
     def __create_charts(self, measurement_name):
