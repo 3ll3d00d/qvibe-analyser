@@ -182,7 +182,6 @@ class Spectrogram(VisibleChart):
             self.__qview.removeItem(c[0])
         self.__series = {}
         self.__buffers = {}
-        self.__change_row_viz()
 
     def __get_meta(self):
         rnd = np.random.default_rng().random(size=self.fs * self.__buffer_size)

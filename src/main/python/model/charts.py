@@ -235,6 +235,7 @@ class VisibleChart:
             # if we have received data since we were last visible, update the charts
             for r in self.__received_data_while_invisible:
                 self.update_chart(r)
+            self.__received_data_while_invisible = set()
         self.__visible = visible
         if self.__visible is True:
             self.__timer.start(1000)
