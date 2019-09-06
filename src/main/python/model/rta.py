@@ -253,7 +253,7 @@ class RTA(VisibleChart):
         :param pen_args: the args to describe the pen
         '''
         if y_data is not None:
-            logger.debug(f"Tick {idx} {np.min(y_data):.4f} - {np.max(y_data):.4f} - {len(y_data)} ")
+            logger.debug(f"Tick {axis} {idx} {np.min(y_data):.4f} - {np.max(y_data):.4f} - {len(y_data)} ")
             self.__show_or_remove_analysis(name, measurement_name, axis, x_data, y_data, pen_args if pen_args else {})
         elif name in self.__plots:
             self.__remove_named_plot(name)
