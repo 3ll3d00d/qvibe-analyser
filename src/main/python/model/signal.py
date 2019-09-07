@@ -31,6 +31,7 @@ class TriAxisSignal:
         self.__idx = idx
         self.__measurement_name = measurement_name
         self.__fs = fs
+        self.__shape = data[:, 2].shape
         self.__x = Signal(measurement_name, 'x', preferences, data[:, 2], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
         self.__y = Signal(measurement_name, 'y', preferences, data[:, 3], fs, resolution_shift, idx=idx,
@@ -67,6 +68,10 @@ class TriAxisSignal:
         :return: the signal encoded as a string.
         '''
         return f"{self.measurement_name}#{self.__idx}#{self.__raw.dtype}#{self.__fs}#{np_to_str(self.__raw)}"
+
+    @property
+    def shape(self):
+        return self.__shape
 
     @property
     def view(self):
@@ -519,22 +524,15 @@ def get_segment_length(fs, resolution_shift=0):
     return 1 << ((fs - 1).bit_length() - int(resolution_shift))
 
 
-def smooth_savgol(x, y, smooth_type=''):
+def smooth_savgol(x, y, wl=SAVGOL_WINDOW_LENGTH, poly=SAVGOL_POLYORDER):
     '''
     Performs Savitzky-Golay smoothing.
     :param x: frequencies.
     :param y: magnitude.
-    :param smooth_type: fractional octave.
+    :param wl: the window length.
+    :param poly: the poly order.
     :return: the smoothed data.
     '''
     from scipy.signal import savgol_filter
-    tokens = smooth_type.split('/')
-    if len(tokens) == 1:
-        wl = SAVGOL_WINDOW_LENGTH
-        poly = SAVGOL_POLYORDER
-    else:
-        wl = int(tokens[1])
-        poly = int(tokens[2])
     smoothed_y = savgol_filter(y, wl, poly)
     return x, smoothed_y
-

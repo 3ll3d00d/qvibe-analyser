@@ -371,7 +371,12 @@ class ColourProvider:
         :param plot_name: the plot name.
         :return: the colour for this plot.
         '''
-        col_name = plot_name[0:-5] if plot_name[-5:] == ':peak' else plot_name
+        if plot_name[-5:] == ':peak':
+            col_name = plot_name[0:-5]
+        elif plot_name[-4:] == ':avg':
+            col_name = plot_name[0:-4]
+        else:
+            col_name = plot_name
         col = self.__plot_colours[col_name] if col_name in self.__plot_colours else self.__next_colour()
         self.__plot_colours[plot_name] = col
         return col

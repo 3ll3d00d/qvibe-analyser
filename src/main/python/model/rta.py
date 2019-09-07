@@ -27,35 +27,40 @@ class RTAEvent(ChartEvent):
 
 class RTA(VisibleChart):
 
-    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, rta_average_widget,
+    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
-                 peak_hold_selector, peak_secs, colour_provider):
-        self.__average = None
+                 show_live, show_peak, hold_secs, sg_window_length, sg_polyorder, colour_provider):
+        self.__show_average = show_average.isChecked()
         self.__plots = {}
+        self.__smooth = False
         self.__colour_provider = colour_provider
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True,
                          cache_size=-1, cache_purger=self.__purge_cache)
         self.__peak_cache = {}
-        self.__peak_secs = peak_secs.value()
-        self.__show_peak = peak_hold_selector.isChecked()
+        self.__hold_secs = hold_secs.value()
+        self.__show_peak = show_peak.isChecked()
+        self.__show_live = show_live.isChecked()
+        self.__sg_wl = sg_window_length.value()
+        self.__sg_wl_widget = sg_window_length
+        self.__sg_wl_widget.lineEdit().setReadOnly(True)
+        self.__sg_poly = None
+        self.__on_sg_poly(sg_polyorder.value())
+        sg_window_length.setToolTip('Higher values = smoother curves')
+        sg_polyorder.setToolTip('Lower values = smoother curves')
         self.__frame = 0
         self.__time = -1
         self.__update_rate = None
         self.__active_view = None
-        self.__smooth = False
         self.__chart = chart
-        self.__average_samples = -1
         # wire the analysis to the view controls
-        self.__on_average_change(rta_average_widget.currentText())
         self.__mag_min = lambda: mag_min_widget.value()
         self.__mag_max = lambda: mag_max_widget.value()
         self.__freq_min = lambda: freq_min_widget.value()
         self.__freq_max = lambda: freq_max_widget.value()
-        rta_average_widget.currentTextChanged.connect(self.__on_average_change)
         self.__on_rta_view_change(rta_view_widget.currentText())
         rta_view_widget.currentTextChanged.connect(self.__on_rta_view_change)
-        self.__on_rta_smooth_change(Qt.Checked if smooth_rta_widget.isChecked() else Qt.Unchecked)
-        smooth_rta_widget.stateChanged.connect(self.__on_rta_smooth_change)
+        self.__on_rta_smooth_change(smooth_rta_widget.isChecked())
+        smooth_rta_widget.toggled[bool].connect(self.__on_rta_smooth_change)
         self.__legend = None
         format_pg_plotitem(self.__chart.getPlotItem(),
                            (0, self.fs / 2),
@@ -67,24 +72,62 @@ class RTA(VisibleChart):
         mag_max_widget.valueChanged['int'].connect(self.__on_mag_limit_change)
         freq_min_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
-        # peak hold wiring
-        peak_hold_selector.stateChanged.connect(self.__on_peak_hold_change)
-        peak_secs.valueChanged['int'].connect(self.__set_peak_cache_size)
+        # curve display wiring
+        show_peak.toggled[bool].connect(self.__on_show_peak_change)
+        show_live.toggled[bool].connect(self.__on_show_live_change)
+        show_average.toggled[bool].connect(self.__on_show_average_change)
+        hold_secs.valueChanged.connect(self.__set_max_cache_age)
+        # S-G filter params
+        sg_window_length.valueChanged['int'].connect(self.__on_sg_window_length)
+        sg_polyorder.valueChanged['int'].connect(self.__on_sg_poly)
 
-    def __set_peak_cache_size(self, seconds):
+    def __on_sg_window_length(self, wl):
+        '''
+        Updates the S-G window length.
+        :param wl: the length.
+        '''
+        if wl % 2 == 0:
+            self.__sg_wl_widget.setValue(wl+1)
+        else:
+            self.__sg_wl = wl
+        if self.__smooth is True:
+            self.update_all_plots()
+
+    def __on_sg_poly(self, poly):
+        '''
+        Updates the S-G poly order.
+        :param poly: the poly order.
+        '''
+        self.__sg_poly = poly
+        wl_min = poly + 1
+        if wl_min % 2 == 0:
+            wl_min += 1
+        self.__sg_wl_widget.setMinimum(wl_min)
+        if self.__smooth is True:
+            self.update_all_plots()
+
+    def __set_max_cache_age(self, seconds):
         '''
         Sets the max age of the cache in seconds.
         :param seconds: the max age of a cache entry.
         '''
-        self.__peak_secs = seconds
+        self.__hold_secs = seconds
         self.for_each_cache(self.__purge_cache)
 
-    def __on_peak_hold_change(self, checked):
+    def __on_show_peak_change(self, checked):
         '''
         shows or hides the peak curves.
         :param checked: if checked then show the curves otherwise hide.
         '''
-        self.__show_peak = Qt.Checked == checked
+        self.__show_peak = checked
+        self.update_all_plots()
+
+    def __on_show_live_change(self, checked):
+        '''
+        shows or hides the live curves.
+        :param checked: if checked then show the curves otherwise hide.
+        '''
+        self.__show_live = checked
         self.update_all_plots()
 
     def __on_mag_limit_change(self, val):
@@ -106,7 +149,7 @@ class RTA(VisibleChart):
         Puts the visible curves into smoothed mode or not.
         :param state: if checked then smooth else unsmoothed.
         '''
-        self.__smooth = state == Qt.Checked
+        self.__smooth = state
         self.update_all_plots()
 
     def __on_rta_view_change(self, view):
@@ -126,21 +169,13 @@ class RTA(VisibleChart):
         self.update_all_plots()
         logger.info(f"Updated active view from {old_view} to {view}")
 
-    def __on_average_change(self, average):
+    def __on_show_average_change(self, checked):
         '''
-        Changes the amount of data to feed into the analysis.
-        :param average: the time in seconds to feed into the analysis.
+        whether to average the cached data.
+        :param checked: whether to apply averaging.
         '''
-        self.__average = average
-        if self.__average == 'Forever':
-            self.__average_samples = -1
-        else:
-            self.__average_samples = self.min_nperseg * int(self.__average[0:-1])
-        logger.info(f"Average mode updated to {average}, requires {self.__average_samples} samples")
-
-    def on_min_nperseg_change(self):
-        if self.__average is not None:
-            self.__on_average_change(self.__average)
+        self.__show_average = checked
+        self.update_all_plots()
 
     def make_event(self, measurement_name, data, idx):
         '''
@@ -149,10 +184,10 @@ class RTA(VisibleChart):
         :param data: the data to analyse.
         :param idx: the index of the data set.
         '''
-        if self.__average_samples == -1 or len(data) <= self.__average_samples:
+        if len(data) <= self.min_nperseg:
             d = data
         else:
-            d = data[-self.__average_samples:]
+            d = data[-self.min_nperseg:]
         return RTAEvent(self, measurement_name, d, idx, self.preferences, self.budget_millis,
                         self.__active_view, self.visible)
 
@@ -171,27 +206,27 @@ class RTA(VisibleChart):
         '''
         data = self.cached_data(measurement_name)
         if data is not None and len(data) > 0:
-            self.__display_triaxis_signal(data[-1])
-            self.render_peak(data, 'x')
-            self.render_peak(data, 'y')
-            self.render_peak(data, 'z')
-            self.render_peak(data, 'sum')
+            if data[-1].shape[0] >= self.min_nperseg:
+                self.__display_triaxis_signal(data)
+                for axis in ['x', 'y', 'z', 'sum']:
+                    self.render_peak(data, axis)
 
-    def __display_triaxis_signal(self, signal, plot_name_prefix=''):
+    def __display_triaxis_signal(self, signals, plot_name_prefix=''):
         '''
         ensures the correct analysis curves for the signal are displayed on screen.
-        :param signal: the TriAxisSignal.
+        :param signal: the TriAxisSignals to average.
         :param plot_name_prefix: extension to signal name for creating a plot name.
         '''
-        if signal.view != self.__active_view:
-            logger.info(f"Updating active view from {signal.view} to {self.__active_view} at {signal.idx}")
-            signal.set_view(self.__active_view)
-        if signal.has_data(self.__active_view) is False:
-            signal.recalc()
-        self.render_signal(signal, 'x', plot_name_prefix=plot_name_prefix)
-        self.render_signal(signal, 'y', plot_name_prefix=plot_name_prefix)
-        self.render_signal(signal, 'z', plot_name_prefix=plot_name_prefix)
-        self.render_signal(signal, 'sum', plot_name_prefix=plot_name_prefix)
+        for signal in signals:
+            if signal.view != self.__active_view:
+                logger.info(f"Updating active view from {signal.view} to {self.__active_view} at {signal.idx}")
+                signal.set_view(self.__active_view)
+            if signal.has_data(self.__active_view) is False and signal.shape[0] >= self.min_nperseg:
+                signal.recalc()
+        self.render_signal(signals, 'x', plot_name_prefix=plot_name_prefix)
+        self.render_signal(signals, 'y', plot_name_prefix=plot_name_prefix)
+        self.render_signal(signals, 'z', plot_name_prefix=plot_name_prefix)
+        self.render_signal(signals, 'sum', plot_name_prefix=plot_name_prefix)
 
     def __purge_cache(self, cache):
         '''
@@ -200,7 +235,7 @@ class RTA(VisibleChart):
         '''
         while len(cache) > 1:
             latest = cache[-1].time[-1]
-            if (latest - cache[0].time[-1]) >= (self.__peak_secs * 1000.0):
+            if (latest - cache[0].time[-1]) >= (self.__hold_secs * 1000.0):
                 cache.popleft()
             else:
                 break
@@ -216,8 +251,9 @@ class RTA(VisibleChart):
         if self.__show_peak is True:
             has_data = sig.get_analysis(self.__active_view)
             if has_data is not None:
-                data_ = [getattr(d, axis).get_analysis(self.__active_view).y for d in data]
-                y_data = np.maximum.reduce(data_)
+                if all([d.shape[0] >= self.min_nperseg for d in data]):
+                    data_ = [getattr(d, axis).get_analysis(self.__active_view).y for d in data]
+                    y_data = np.maximum.reduce(data_)
                 x_data = has_data.x
             pen_args = {'style': Qt.DashLine}
         self.__manage_plot_item(f"{sig.measurement_name}:{sig.axis}:peak", data[-1].idx, sig.measurement_name, sig.axis,
@@ -225,21 +261,27 @@ class RTA(VisibleChart):
 
     def render_signal(self, data, axis, plot_name_prefix=''):
         '''
-        Converts a signal into a renderable plot item.
+        Converts (one or more) signal into a renderable plot item.
         :param data: the cached data.
         :param axis: the axis to display.
         :param plot_name_prefix: optional plot name prefix.
         '''
-        y_data = None
-        x_data = None
-        sig = getattr(data, axis)
-        view = sig.get_analysis(self.__active_view)
-        if view is not None:
-            y_data = view.y
-            x_data = view.x
-        pen_args = {'style': Qt.SolidLine}
+        y_data = y_avg = x_data = None
+        sig = getattr(data[-1], axis)
+        has_data = sig.get_analysis(self.__active_view)
+        if has_data is not None:
+            if self.__show_average is True:
+                if all([d.shape[0] >= self.min_nperseg for d in data]):
+                    y_avg = np.average([getattr(d, axis).get_analysis(self.__active_view).y for d in data], axis=0)
+            if self.__show_live is True:
+                y_data = has_data.y
+            x_data = has_data.x
+        pen = {'style': Qt.SolidLine}
         plot_name = f"{plot_name_prefix}{sig.measurement_name}:{sig.axis}"
-        self.__manage_plot_item(plot_name, data.idx, sig.measurement_name, sig.axis, x_data, y_data, pen_args)
+        self.__manage_plot_item(plot_name, data[-1].idx, sig.measurement_name, sig.axis, x_data, y_data, pen)
+        avg_pen = {'style': Qt.DashDotDotLine}
+        avg_plot_name = f"{plot_name_prefix}{sig.measurement_name}:{sig.axis}:avg"
+        self.__manage_plot_item(avg_plot_name, data[-1].idx, sig.measurement_name, sig.axis, x_data, y_avg, avg_pen)
 
     def __manage_plot_item(self, name, idx, measurement_name, axis, x_data, y_data, pen_args):
         '''
@@ -279,7 +321,7 @@ class RTA(VisibleChart):
         :param pen_args: the description of the pen.
         '''
         if self.is_visible(measurement=measurement_name, axis=axis) is True:
-            y = smooth_savgol(x_data, y_data)[1] if self.__smooth is True else y_data
+            y = smooth_savgol(x_data, y_data, wl=self.__sg_wl, poly=self.__sg_poly)[1] if self.__smooth is True else y_data
             if plot_name in self.__plots:
                 self.__plots[plot_name].setData(x_data, y)
             else:
