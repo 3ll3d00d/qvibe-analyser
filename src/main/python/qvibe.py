@@ -133,7 +133,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.showAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
                    self.showLive, self.showPeak, self.showTarget, self.targetAdjust, self.holdSecs, self.sgWindowLength,
-                   self.sgPolyOrder, colour_provider),
+                   self.sgPolyOrder, self.exportFRD, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.visibleCurves, self.__measurement_store),
@@ -165,6 +165,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.zoomInButton.setIcon(qta.icon('fa5s.compress-arrows-alt'))
         self.zoomOutButton.setIcon(qta.icon('fa5s.expand-arrows-alt'))
         self.loadMeasurementButton.setIcon(qta.icon('fa5s.folder-open'))
+        self.exportFRD.setIcon(qta.icon('fa5s.file-export'))
         self.actionSave_Signal.triggered.connect(self.__save_signal)
         self.actionLoad_Signal.triggered.connect(self.__load_signal)
         self.loadMeasurementButton.clicked.connect(self.__load_signal)

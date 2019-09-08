@@ -115,7 +115,9 @@ class MeasurementStore:
         Exports the measurement to a file.
         :param measurement: the measurement.
         '''
-        file_name = QFileDialog.getSaveFileName(caption='Export Signal', directory=f"{measurement.name}.qvibe", filter="QVibe Signals (*.qvibe)")
+        file_name = QFileDialog.getSaveFileName(caption='Export Signal',
+                                                directory=f"{measurement.name}.qvibe",
+                                                filter="QVibe Signals (*.qvibe)")
         file_name = str(file_name[0]).strip()
         if len(file_name) > 0:
             with gzip.open(file_name, 'wb+') as outfile:

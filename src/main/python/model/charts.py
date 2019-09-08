@@ -243,7 +243,7 @@ class VisibleChart:
             self.__timer.stop()
 
     def for_each_measurement(self, func):
-        ''' passes each data cache to the supplied function. '''
+        ''' passes each measurement name to the supplied function. '''
         for name in self.cached_measurement_names():
             func(name)
 

@@ -2,10 +2,12 @@ import logging
 
 import numpy as np
 import pyqtgraph as pg
+from qtpy.QtWidgets import QMessageBox
 from qtpy.QtCore import Qt
 
 from common import format_pg_plotitem
 from model.charts import VisibleChart, ChartEvent
+from model.frd import ExportDialog
 from model.preferences import RTA_TARGET
 from model.signal import smooth_savgol, Analysis
 
@@ -31,7 +33,7 @@ class RTA(VisibleChart):
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
                  show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
-                 colour_provider):
+                 export_frd_button, colour_provider):
         self.__show_average = show_average.isChecked()
         self.__plots = {}
         self.__smooth = False
@@ -48,7 +50,7 @@ class RTA(VisibleChart):
         self.__show_target_toggle = show_target
         self.__target_adjust_db_widget = target_adjust_db
         target_adjust_db.setToolTip('Adjusts the level of the target curve')
-        target_adjust_db.valueChanged['int'].connect(self.__adjust_target_level)
+        target_adjust_db.valueChanged.connect(self.__adjust_target_level)
         self.__sg_wl = sg_window_length.value()
         self.__sg_wl_widget = sg_window_length
         self.__sg_wl_widget.lineEdit().setReadOnly(True)
@@ -91,6 +93,22 @@ class RTA(VisibleChart):
         sg_window_length.valueChanged['int'].connect(self.__on_sg_window_length)
         sg_polyorder.valueChanged['int'].connect(self.__on_sg_poly)
         self.reload_target()
+        # export
+        export_frd_button.clicked.connect(self.__export_frd)
+
+    def __export_frd(self):
+        '''
+        Shows the export dialog.
+        '''
+        available_data = {n: d for n in self.cached_measurement_names() for d in self.cached_data(n) if d is not None}
+        if len(available_data.keys()) > 0:
+            ExportDialog(self.__chart, available_data).exec()
+        else:
+            msg_box = QMessageBox()
+            msg_box.setText('No data has been recorded')
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle('Nothing to export')
+            msg_box.exec()
 
     def __on_sg_window_length(self, wl):
         '''
@@ -213,8 +231,11 @@ class RTA(VisibleChart):
             arr = np.loadtxt(io.StringIO(self.preferences.get(RTA_TARGET)), dtype=np.float64, ndmin=2)
             f = arr[0]
             m = arr[1]
-            adj = 85.0 - (np.mean(m[0: np.argmax(f > 60)]) if np.max(f) > 60 else np.mean(m))
-            adjusted_m = m + adj
+            if np.min(m) < 40.0:
+                adj = 85.0 - (np.mean(m[0: np.argmax(f > 60)]) if np.max(f) > 60 else np.mean(m))
+                adjusted_m = m + adj
+            else:
+                adjusted_m = m
             self.__target_data = Analysis((f, adjusted_m, adjusted_m))
         else:
             self.__show_target_toggle.setChecked(False)

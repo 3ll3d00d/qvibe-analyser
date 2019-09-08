@@ -38,7 +38,7 @@ class TriAxisSignal:
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
         self.__z = Signal(measurement_name, 'z', preferences, data[:, 4], fs, resolution_shift, idx=idx,
                           mode=mode, pre_calc=pre_calc, view_mode=view_mode)
-        self.__sum = SummedSignal(measurement_name, 'sum', preferences, self.__x, self.__y, self.__z, idx=idx,
+        self.__sum = SummedSignal(measurement_name, 'sum', preferences, fs, self.__x, self.__y, self.__z, idx=idx,
                                   pre_calc=pre_calc, view_mode=view_mode)
 
     @staticmethod
@@ -156,13 +156,18 @@ class Analysis:
 
 
 class AnalysableSignal:
-    def __init__(self, measurement_name, axis, preferences, idx=-1, view_mode='avg'):
+    def __init__(self, measurement_name, axis, preferences, fs, idx=-1, view_mode='avg'):
         self.__measurement_name = measurement_name
         self.__axis = axis
         self.__preferences = preferences
+        self.__fs = fs
         self.__view_mode = view_mode
         self.__idx = idx
         self.__output = {}
+
+    @property
+    def fs(self):
+        return self.__fs
 
     @property
     def measurement_name(self):
@@ -223,8 +228,8 @@ class AnalysableSignal:
 
 class SummedSignal(AnalysableSignal):
 
-    def __init__(self, measurement_name, axis, preferences, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
-        super().__init__(measurement_name, axis, preferences, idx=idx, view_mode=view_mode)
+    def __init__(self, measurement_name, axis, preferences, fs, x, y, z, idx=-1, pre_calc=False, view_mode='avg'):
+        super().__init__(measurement_name, axis, preferences, fs, idx=idx, view_mode=view_mode)
         self.__x = x
         self.__y = y
         self.__z = z
@@ -272,10 +277,9 @@ class Signal(AnalysableSignal):
         :param mode: optional analysis mode, can be none (raw data), vibration or tilt.
         :param pre_calc: if True, calculate the required views.
         '''
-        super().__init__(measurement_name, axis, preferences, idx=idx, view_mode=view_mode)
+        super().__init__(measurement_name, axis, preferences, fs, idx=idx, view_mode=view_mode)
         self.__raw_data = data
         self.__data = None
-        self.__fs = fs
         self.__analyse_data(mode)
         self.__resolution_shift = resolution_shift
         if pre_calc is True:
@@ -312,10 +316,6 @@ class Signal(AnalysableSignal):
         self.set_analysis(self.__calculate())
         end = time.time()
         logger.debug(f"Recalc {self.measurement_name}:{self.axis}:{self.idx} in {to_millis(start, end)}ms")
-
-    @property
-    def fs(self):
-        return self.__fs
 
     def __calculate(self):
         if self.view_mode == 'avg':
