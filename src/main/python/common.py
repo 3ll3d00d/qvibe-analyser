@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from qtpy import QtCore
 from qtpy.QtCore import QRunnable
 from qtpy.QtGui import QCursor, QFont
-from qtpy.QtWidgets import QApplication
+from qtpy.QtWidgets import QApplication, QFileDialog
 
 logger = logging.getLogger('qvibe.common')
 
@@ -580,3 +580,22 @@ def np_to_str(arr):
     out = io.StringIO()
     np.savetxt(out, arr)
     return out.getvalue()
+
+
+def parse_file(filter, title, parsers):
+    '''
+    Presents a file dialog to the user so they can choose something to load.
+    :return: a 2 entry tuple with the file name and loaded thing (if anything was loaded)
+    '''
+    dialog = QFileDialog()
+    dialog.setFileMode(QFileDialog.ExistingFile)
+    dialog.setNameFilter(filter)
+    dialog.setWindowTitle(title)
+    if dialog.exec():
+        selected = dialog.selectedFiles()
+        if len(selected) > 0:
+            file_name = selected[0]
+            for k,v in parsers.items():
+                if file_name.endswith(k):
+                    return v(file_name)
+    return None, None

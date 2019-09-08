@@ -838,6 +838,29 @@
              </widget>
             </item>
             <item>
+             <widget class="QPushButton" name="showTarget">
+              <property name="text">
+               <string>Target</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="targetAdjust">
+              <property name="suffix">
+               <string> dB</string>
+              </property>
+              <property name="minimum">
+               <number>-150</number>
+              </property>
+              <property name="maximum">
+               <number>150</number>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QPushButton" name="smoothRta">
               <property name="text">
                <string>Smooth</string>
@@ -1090,7 +1113,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>199</x>
-     <y>164</y>
+     <y>292</y>
     </hint>
     <hint type="destinationlabel">
      <x>740</x>
@@ -1106,7 +1129,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>199</x>
-     <y>100</y>
+     <y>228</y>
     </hint>
     <hint type="destinationlabel">
      <x>741</x>
@@ -1122,7 +1145,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>160</x>
-     <y>99</y>
+     <y>227</y>
     </hint>
     <hint type="destinationlabel">
      <x>173</x>
@@ -1138,7 +1161,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>160</x>
-     <y>163</y>
+     <y>291</y>
     </hint>
     <hint type="destinationlabel">
      <x>340</x>
@@ -1153,8 +1176,8 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>112</x>
-     <y>224</y>
+     <x>118</x>
+     <y>345</y>
     </hint>
     <hint type="destinationlabel">
      <x>431</x>
@@ -1169,8 +1192,8 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>112</x>
-     <y>224</y>
+     <x>118</x>
+     <y>383</y>
     </hint>
     <hint type="destinationlabel">
      <x>521</x>
@@ -1185,8 +1208,8 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>112</x>
-     <y>316</y>
+     <x>118</x>
+     <y>437</y>
     </hint>
     <hint type="destinationlabel">
      <x>572</x>
@@ -1201,8 +1224,8 @@
    <slot>update_target()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>112</x>
-     <y>316</y>
+     <x>118</x>
+     <y>475</y>
     </hint>
     <hint type="destinationlabel">
      <x>691</x>
@@ -1218,7 +1241,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>199</x>
-     <y>112</y>
+     <y>208</y>
     </hint>
     <hint type="destinationlabel">
      <x>760</x>

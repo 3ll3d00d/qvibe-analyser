@@ -6,7 +6,8 @@ from qtpy.QtCore import Qt
 
 from common import format_pg_plotitem
 from model.charts import VisibleChart, ChartEvent
-from model.signal import smooth_savgol
+from model.preferences import RTA_TARGET
+from model.signal import smooth_savgol, Analysis
 
 logger = logging.getLogger('qvibe.rta')
 
@@ -29,7 +30,8 @@ class RTA(VisibleChart):
 
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
-                 show_live, show_peak, hold_secs, sg_window_length, sg_polyorder, colour_provider):
+                 show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
+                 colour_provider):
         self.__show_average = show_average.isChecked()
         self.__plots = {}
         self.__smooth = False
@@ -40,6 +42,13 @@ class RTA(VisibleChart):
         self.__hold_secs = hold_secs.value()
         self.__show_peak = show_peak.isChecked()
         self.__show_live = show_live.isChecked()
+        self.__target_data = None
+        self.__target_adjustment_db = target_adjust_db.value()
+        self.__show_target = show_target.isChecked()
+        self.__show_target_toggle = show_target
+        self.__target_adjust_db_widget = target_adjust_db
+        target_adjust_db.setToolTip('Adjusts the level of the target curve')
+        target_adjust_db.valueChanged['int'].connect(self.__adjust_target_level)
         self.__sg_wl = sg_window_length.value()
         self.__sg_wl_widget = sg_window_length
         self.__sg_wl_widget.lineEdit().setReadOnly(True)
@@ -64,7 +73,7 @@ class RTA(VisibleChart):
         self.__legend = None
         format_pg_plotitem(self.__chart.getPlotItem(),
                            (0, self.fs / 2),
-                           (0, 150),
+                           (-150, 150),
                            x_range=(self.__freq_min(), self.__freq_max()),
                            y_range=(self.__mag_min(), self.__mag_max()))
         # link limit controls to the chart
@@ -76,10 +85,12 @@ class RTA(VisibleChart):
         show_peak.toggled[bool].connect(self.__on_show_peak_change)
         show_live.toggled[bool].connect(self.__on_show_live_change)
         show_average.toggled[bool].connect(self.__on_show_average_change)
+        show_target.toggled[bool].connect(self.__on_show_target_change)
         hold_secs.valueChanged.connect(self.__set_max_cache_age)
         # S-G filter params
         sg_window_length.valueChanged['int'].connect(self.__on_sg_window_length)
         sg_polyorder.valueChanged['int'].connect(self.__on_sg_poly)
+        self.reload_target()
 
     def __on_sg_window_length(self, wl):
         '''
@@ -177,6 +188,42 @@ class RTA(VisibleChart):
         self.__show_average = checked
         self.update_all_plots()
 
+    def __on_show_target_change(self, checked):
+        '''
+        whether to show the target curve.
+        :param checked: whether to show the target.
+        '''
+        self.__show_target = checked
+        self.__render_target()
+
+    def __adjust_target_level(self, adjustment):
+        ''' Adjusts the target level. '''
+        self.__target_adjustment_db = adjustment
+        self.__render_target()
+
+    def reload_target(self):
+        '''
+        Loads the target from preferences.
+        '''
+        if self.preferences.has(RTA_TARGET) is True:
+            self.__show_target_toggle.setEnabled(True)
+            self.__target_adjust_db_widget.setEnabled(True)
+            self.__target_adjust_db_widget.setValue(0)
+            import io
+            arr = np.loadtxt(io.StringIO(self.preferences.get(RTA_TARGET)), dtype=np.float64, ndmin=2)
+            f = arr[0]
+            m = arr[1]
+            adj = 85.0 - (np.mean(m[0: np.argmax(f > 60)]) if np.max(f) > 60 else np.mean(m))
+            adjusted_m = m + adj
+            self.__target_data = Analysis((f, adjusted_m, adjusted_m))
+        else:
+            self.__show_target_toggle.setChecked(False)
+            self.__show_target_toggle.setEnabled(False)
+            self.__target_adjust_db_widget.setValue(0)
+            self.__target_adjust_db_widget.setEnabled(False)
+            self.__target_data = None
+        self.__render_target()
+
     def make_event(self, measurement_name, data, idx):
         '''
         Creates an RTAEvent to pass to the analysis thread.
@@ -239,6 +286,18 @@ class RTA(VisibleChart):
                 cache.popleft()
             else:
                 break
+
+    def __render_target(self):
+        '''
+        Renders the target data.
+        '''
+        if self.__target_data is None or self.__show_target is False:
+            if 'Target' in self.__plots:
+                self.__remove_named_plot('Target')
+        elif self.__target_data is not None and self.__show_target is True:
+            pen_args = {'style': Qt.SolidLine}
+            y_db = self.__target_data.y + self.__target_adjustment_db
+            self.__render_or_update(pen_args, 'Target', self.__target_data.x, y_db)
 
     def render_peak(self, data, axis):
         '''
@@ -322,12 +381,22 @@ class RTA(VisibleChart):
         '''
         if self.is_visible(measurement=measurement_name, axis=axis) is True:
             y = smooth_savgol(x_data, y_data, wl=self.__sg_wl, poly=self.__sg_poly)[1] if self.__smooth is True else y_data
-            if plot_name in self.__plots:
-                self.__plots[plot_name].setData(x_data, y)
-            else:
-                if self.__legend is None:
-                    self.__legend = self.__chart.addLegend(offset=(-15, -15))
-                pen = pg.mkPen(color=self.__colour_provider.get_colour(plot_name), width=2, **pen_args)
-                self.__plots[plot_name] = self.__chart.plot(x_data, y, pen=pen, name=plot_name)
+            self.__render_or_update(pen_args, plot_name, x_data, y)
         elif plot_name in self.__plots:
             self.__remove_named_plot(plot_name)
+
+    def __render_or_update(self, pen_args, plot_name, x_data, y):
+        '''
+        actually updates (or creates) the plot.
+        :param pen_args: the pen args.
+        :param plot_name: the plot name.
+        :param x_data: x.
+        :param y: y.
+        '''
+        if plot_name in self.__plots:
+            self.__plots[plot_name].setData(x_data, y)
+        else:
+            if self.__legend is None:
+                self.__legend = self.__chart.addLegend(offset=(-15, -15))
+            pen = pg.mkPen(color=self.__colour_provider.get_colour(plot_name), width=2, **pen_args)
+            self.__plots[plot_name] = self.__chart.plot(x_data, y, pen=pen, name=plot_name)

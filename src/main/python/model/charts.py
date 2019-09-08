@@ -377,11 +377,14 @@ class ColourProvider:
             col_name = plot_name[0:-4]
         else:
             col_name = plot_name
-        col = self.__plot_colours[col_name] if col_name in self.__plot_colours else self.__next_colour()
+        col = self.__plot_colours[col_name] if col_name in self.__plot_colours else self.__next_colour(col_name)
         self.__plot_colours[plot_name] = col
         return col
 
-    def __next_colour(self):
-        colour = self.__cm[self.__cm_index % len(self.__cm)][1]
-        self.__cm_index += 1
-        return colour
+    def __next_colour(self, name):
+        if name == 'Target':
+            return 'r'
+        else:
+            colour = self.__cm[self.__cm_index % len(self.__cm)][1]
+            self.__cm_index += 1
+            return colour

@@ -1,9 +1,12 @@
 import os
+
+import numpy as np
 import qtawesome as qta
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QDialog, QMessageBox, QDialogButtonBox, QFileDialog
 
+from common import parse_file, np_to_str
 from ui.preferences import Ui_preferencesDialog
 
 DISPLAY_SMOOTH_GRAPHS = 'display/smooth_graphs'
@@ -51,6 +54,8 @@ SUM_Z_SCALE = 'sum/z_scale'
 WAV_DOWNLOAD_DIR = 'wav/download_dir'
 
 SNAPSHOT_GROUP = 'snapshot'
+
+RTA_TARGET = 'rta/target'
 
 DEFAULT_PREFS = {
     ANALYSIS_RESOLUTION: 1.0,
@@ -198,6 +203,8 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.setupUi(self)
         self.__preferences = preferences
         self.__spectro = spectro
+        self.__should_clear_target = False
+        self.__new_target = None
         self.buttonBox.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self.__reset)
         self.checkForUpdates.setChecked(self.__preferences.get(SYSTEM_CHECK_FOR_UPDATES))
         self.checkForBetaUpdates.setChecked(self.__preferences.get(SYSTEM_CHECK_FOR_BETA_UPDATES))
@@ -228,6 +235,11 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
             self.recorderIP.setFocus(Qt.OtherFocusReason)
         self.deleteRecorderButton.setEnabled(enable_delete)
         self.addRecorderButton.setEnabled(False)
+        has_target = self.__preferences.has(RTA_TARGET)
+        self.clearTarget.setEnabled(has_target)
+        self.targetSet.setChecked(has_target)
+        self.clearTarget.setIcon(qta.icon('fa5s.times', color='red'))
+        self.loadTarget.setIcon(qta.icon('fa5s.folder-open'))
 
     def __balance_mag(self, val):
         keep_range(self.magMin, self.magMax, 10)
@@ -249,6 +261,23 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         if idx > -1:
             self.recorders.removeItem(idx)
             self.deleteRecorderButton.setEnabled(self.recorders.count() > 0)
+
+    def clear_target(self):
+        '''
+        Clears any RTA target.
+        '''
+        self.__should_clear_target = True
+        self.__new_target = None
+        self.targetSet.setChecked(False)
+
+    def load_target(self):
+        '''
+        Allows user to select an FRD file to set the target.
+        '''
+        parsers = {'frd': self.__parse_frd, 'txt': self.__parse_frd}
+        _, data = parse_file('FRD (*.frd *.txt)', 'Load Target', parsers)
+        self.__new_target = data
+        self.targetSet.setChecked(data is not None)
 
     @staticmethod
     def __is_valid_ip(ip):
@@ -319,6 +348,10 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         else:
             self.__preferences.clear(RECORDER_SAVED_IPS)
             self.__recorder_store.clear()
+        if self.__should_clear_target is True:
+            self.__preferences.clear(RTA_TARGET)
+        if self.__new_target is not None:
+            self.__preferences.set(RTA_TARGET, self.__new_target)
         QDialog.accept(self)
 
     def pick_save_dir(self):
@@ -327,13 +360,32 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         if len(dir_name) > 0:
             self.wavSaveDir.setText(dir_name)
 
-    def alert_on_change(self, title, text='Change will not take effect until the application is restarted',
+    @staticmethod
+    def alert_on_change(title, text='Change will not take effect until the application is restarted',
                         icon=QMessageBox.Warning):
         msg_box = QMessageBox()
         msg_box.setText(text)
         msg_box.setIcon(icon)
         msg_box.setWindowTitle(title)
         msg_box.exec()
+
+    @staticmethod
+    def __parse_frd(file_name):
+        '''
+        Reads an FRD file and converts it into x,y vals but returns the raw txt (i.e. we validate the data on load).
+        :param file_name: the file.
+        :return: file_name, the frd as an ndarray in str format.
+        '''
+        if file_name is not None:
+            comment_char = None
+            with open(file_name) as f:
+                c = f.read(1)
+                if not c.isalnum():
+                    comment_char = c
+            f, m = np.genfromtxt(file_name, comments=comment_char, unpack=True)
+            arr = np.vstack((f, m))
+            return file_name, np_to_str(arr)
+        return None, None
 
 
 def keep_range(min_widget, max_widget, range):

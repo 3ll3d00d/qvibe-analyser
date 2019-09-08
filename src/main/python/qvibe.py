@@ -27,7 +27,7 @@ from qtpy import QtCore
 from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, QTime, QRunnable, QThread
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox, QFileDialog
-from common import block_signals, ReactorRunner, np_to_str
+from common import block_signals, ReactorRunner, np_to_str, parse_file
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
     CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX, SNAPSHOT_GROUP
@@ -132,7 +132,8 @@ class QVibe(QMainWindow, Ui_MainWindow):
                          self.findPeaksButton, colour_provider),
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.showAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
-                   self.showLive, self.showPeak, self.holdSecs, self.sgWindowLength, self.sgPolyOrder, colour_provider),
+                   self.showLive, self.showPeak, self.showTarget, self.targetAdjust, self.holdSecs, self.sgWindowLength,
+                   self.sgPolyOrder, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,
                            self.visibleCurves, self.__measurement_store),
@@ -227,36 +228,29 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         Loads a new signal (replacing any current data if required).
         '''
+        parsers = {'qvibe': self.__parse_qvibe}
+        name, data = parse_file('Signal (*.qvibe)', 'Load Signal', parsers)
+        if name is not None:
+            self.statusbar.showMessage(f"Loaded {name}")
+            for d in data:
+                self.__measurement_store.add(name, *d)
 
-        def parser(file_name):
-            with gzip.open(file_name, 'r') as infile:
-                return json.loads(infile.read().decode('utf-8'))
-        file_name, input = self.__load('*.qvibe', 'Load Signal', parser)
-        if input is not None and len(input.keys()) > 0:
-            for ip, data_txt in input.items():
-                import io
-                data = np.loadtxt(io.StringIO(data_txt), dtype=np.float64, ndmin=2)
-                self.__measurement_store.add(os.path.basename(file_name)[0:-6], ip, data)
-
-    def __load(self, filter, title, parser):
+    @staticmethod
+    def __parse_qvibe(file_name):
         '''
-        Presents a file dialog to the user so they can choose something to load.
-        :return: a 2 entry tuple with the file name and loaded thing (if anything was loaded)
+        Parses a qvibe file.
+        :param file_name: the file name.
+        :return: the measurements to load
         '''
-        input = None
-        file_name = None
-        dialog = QFileDialog(parent=self)
-        dialog.setFileMode(QFileDialog.ExistingFile)
-        dialog.setNameFilter(filter)
-        dialog.setWindowTitle(title)
-        if dialog.exec():
-            selected = dialog.selectedFiles()
-            if len(selected) > 0:
-                file_name = selected[0]
-                input = parser(file_name)
-                if input is not None:
-                    self.statusbar.showMessage(f"Loaded {selected[0]}")
-        return file_name, input
+        vals = []
+        with gzip.open(file_name, 'r') as infile:
+            dat = json.loads(infile.read().decode('utf-8'))
+            if dat is not None and len(dat.keys()) > 0:
+                for ip, data_txt in dat.items():
+                    import io
+                    vals.append([ip, np.loadtxt(io.StringIO(data_txt), dtype=np.float64, ndmin=2)])
+                return os.path.basename(file_name)[0:-6], vals
+        return None, None
 
     def reset_recording(self):
         '''
@@ -469,6 +463,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         Shows the preferences dialog.
         '''
         PreferencesDialog(self.preferences, self.__style_path_root, self.__recorder_store, self.__analysers[2], parent=self).exec()
+        self.__analysers[1].reload_target()
 
     def show_about(self):
         msg_box = QMessageBox()

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>642</width>
-    <height>536</height>
+    <height>578</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,13 +18,6 @@
     <layout class="QVBoxLayout" name="panes">
      <item>
       <layout class="QGridLayout" name="userLayout">
-       <item row="1" column="1">
-        <widget class="QLineEdit" name="wavSaveDir">
-         <property name="readOnly">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
        <item row="1" column="0">
         <widget class="QLabel" name="wavSaveDirLabel">
          <property name="text">
@@ -36,6 +29,13 @@
         <widget class="QToolButton" name="wavSaveDirPicker">
          <property name="text">
           <string>...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="wavSaveDir">
+         <property name="readOnly">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -64,7 +64,14 @@
       </layout>
      </item>
      <item>
-      <layout class="QGridLayout" name="displayPane" rowstretch="0,0,0" columnstretch="1,1,3">
+      <layout class="QGridLayout" name="displayPane" rowstretch="0,0,0,0" columnstretch="0,0,1">
+       <item row="1" column="0">
+        <widget class="QLabel" name="rtaLabel">
+         <property name="text">
+          <string>RTA</string>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="0" colspan="3">
         <widget class="QLabel" name="displayLayoutLabel">
          <property name="font">
@@ -87,7 +94,14 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="2">
+       <item row="1" column="1">
+        <widget class="QLabel" name="targetLabel">
+         <property name="text">
+          <string>Target</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
         <widget class="QComboBox" name="spectroScaleFactor">
          <item>
           <property name="text">
@@ -121,21 +135,56 @@
          </item>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="spectroScaleFactorLabel">
-         <property name="text">
-          <string>Scale  Factor</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0" rowspan="2">
+       <item row="2" column="0" rowspan="2">
         <widget class="QLabel" name="spectroScaleLabel">
          <property name="text">
           <string>Spectrogram</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="2">
+       <item row="3" column="1">
+        <widget class="QLabel" name="spectroScaleAlgoLabel">
+         <property name="text">
+          <string>Algorithm</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLabel" name="spectroScaleFactorLabel">
+         <property name="text">
+          <string>Scale  Factor</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <layout class="QHBoxLayout" name="targetLayout">
+         <item>
+          <widget class="QToolButton" name="loadTarget">
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="clearTarget">
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="targetSet">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="text">
+            <string>Set?</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="3" column="2">
         <widget class="QComboBox" name="spectroScaleAlgo">
          <item>
           <property name="text">
@@ -162,13 +211,6 @@
            <string>Lanczos</string>
           </property>
          </item>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QLabel" name="spectroScaleAlgoLabel">
-         <property name="text">
-          <string>Algorithm</string>
-         </property>
         </widget>
        </item>
       </layout>
@@ -372,7 +414,7 @@
        <item row="1" column="0" rowspan="2">
         <widget class="QLabel" name="ipAddressLabel">
          <property name="text">
-          <string>IP Address</string>
+          <string>Address</string>
          </property>
         </widget>
        </item>
@@ -461,8 +503,8 @@
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>288</x>
-     <y>423</y>
+     <x>294</x>
+     <y>571</y>
     </hint>
     <hint type="destinationlabel">
      <x>157</x>
@@ -477,8 +519,8 @@
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>356</x>
-     <y>423</y>
+     <x>362</x>
+     <y>571</y>
     </hint>
     <hint type="destinationlabel">
      <x>286</x>
@@ -509,8 +551,8 @@
    <slot>validate_ip()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>111</x>
-     <y>269</y>
+     <x>175</x>
+     <y>430</y>
     </hint>
     <hint type="destinationlabel">
      <x>31</x>
@@ -525,8 +567,8 @@
    <slot>add_recorder()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>620</x>
-     <y>271</y>
+     <x>633</x>
+     <y>431</y>
     </hint>
     <hint type="destinationlabel">
      <x>633</x>
@@ -541,12 +583,44 @@
    <slot>delete_recorder()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>619</x>
-     <y>313</y>
+     <x>633</x>
+     <y>471</y>
     </hint>
     <hint type="destinationlabel">
      <x>637</x>
      <y>347</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>clearTarget</sender>
+   <signal>clicked()</signal>
+   <receiver>preferencesDialog</receiver>
+   <slot>clear_target()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>236</x>
+     <y>119</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>276</x>
+     <y>100</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>loadTarget</sender>
+   <signal>clicked()</signal>
+   <receiver>preferencesDialog</receiver>
+   <slot>load_target()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>189</x>
+     <y>123</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>216</x>
+     <y>103</y>
     </hint>
    </hints>
   </connection>
@@ -556,5 +630,7 @@
   <slot>validate_ip()</slot>
   <slot>add_recorder()</slot>
   <slot>delete_recorder()</slot>
+  <slot>clear_target()</slot>
+  <slot>load_target()</slot>
  </slots>
 </ui>
