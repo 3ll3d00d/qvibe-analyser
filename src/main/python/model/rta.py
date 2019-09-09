@@ -11,6 +11,8 @@ from model.frd import ExportDialog
 from model.preferences import RTA_TARGET
 from model.signal import smooth_savgol, Analysis
 
+TARGET_PLOT_NAME = 'Target'
+
 logger = logging.getLogger('qvibe.rta')
 
 
@@ -37,6 +39,7 @@ class RTA(VisibleChart):
         self.__show_average = show_average.isChecked()
         self.__ref_curve_selector = ref_curve_selector
         self.__ref_curve = None
+        self.__reset_ref_curve_selector()
         self.__plots = {}
         self.__plot_data = {}
         self.__smooth = False
@@ -99,7 +102,6 @@ class RTA(VisibleChart):
         # export
         export_frd_button.clicked.connect(self.__export_frd)
         # ref curves
-        self.__reset_ref_curve_selector()
         self.__ref_curve_selector.currentTextChanged.connect(self.__set_reference_curve)
 
     def __set_reference_curve(self, curve):
@@ -108,10 +110,20 @@ class RTA(VisibleChart):
         :param curve: the new reference curve.
         '''
         new_curve = curve if curve != '' else None
+        old_curve = self.__ref_curve
         if self.__ref_curve != new_curve:
             logger.info(f"Updating reference curve from {self.__ref_curve} to {new_curve}")
             self.__ref_curve = new_curve
-            self.update_chart(self.__ref_curve)
+            min_y, max_y = self.__chart.getPlotItem().getViewBox().state['viewRange'][1]
+            adj = (max_y - min_y) / 2
+            if old_curve is None:
+                self.__chart.getPlotItem().setYRange(-adj, adj, padding=0.0)
+            else:
+                centre = (self.__mag_max() - self.__mag_min()) / 2
+                self.__chart.getPlotItem().setYRange(centre - adj + self.__mag_min(), centre + adj + self.__mag_min(),
+                                                     padding=0.0)
+
+            self.__render_target()
             self.update_all_plots()
 
     def __export_frd(self):
@@ -231,11 +243,15 @@ class RTA(VisibleChart):
         '''
         self.__show_target = checked
         self.__render_target()
+        if self.__ref_curve == TARGET_PLOT_NAME:
+            self.update_all_plots()
 
     def __adjust_target_level(self, adjustment):
         ''' Adjusts the target level. '''
         self.__target_adjustment_db = adjustment
         self.__render_target()
+        if self.__ref_curve == TARGET_PLOT_NAME:
+            self.update_all_plots()
 
     def reload_target(self):
         '''
@@ -255,12 +271,20 @@ class RTA(VisibleChart):
             else:
                 adjusted_m = m
             self.__target_data = Analysis((f, adjusted_m, adjusted_m))
+            idx = self.__ref_curve_selector.findText(TARGET_PLOT_NAME)
+            if idx == -1:
+                self.__ref_curve_selector.addItem(TARGET_PLOT_NAME)
         else:
             self.__show_target_toggle.setChecked(False)
             self.__show_target_toggle.setEnabled(False)
             self.__target_adjust_db_widget.setValue(0)
             self.__target_adjust_db_widget.setEnabled(False)
             self.__target_data = None
+            idx = self.__ref_curve_selector.findText(TARGET_PLOT_NAME)
+            if idx != -1:
+                if self.__ref_curve == TARGET_PLOT_NAME:
+                    self.__ref_curve_selector.setCurrentIndex(0)
+                self.__ref_curve_selector.removeItem(idx)
         self.__render_target()
 
     def make_event(self, measurement_name, data, idx):
@@ -339,12 +363,12 @@ class RTA(VisibleChart):
         Renders the target data.
         '''
         if self.__target_data is None or self.__show_target is False:
-            if 'Target' in self.__plots:
-                self.__remove_named_plot('Target')
+            if TARGET_PLOT_NAME in self.__plots:
+                self.__remove_named_plot(TARGET_PLOT_NAME)
         elif self.__target_data is not None and self.__show_target is True:
             pen_args = {'style': Qt.SolidLine}
             y_db = self.__target_data.y + self.__target_adjustment_db
-            self.__render_or_update(pen_args, 'Target', self.__target_data.x, y_db)
+            self.__render_or_update(pen_args, TARGET_PLOT_NAME, self.__target_data.x, y_db)
 
     def render_peak(self, data, axis):
         '''
@@ -458,7 +482,8 @@ class RTA(VisibleChart):
                 self.__legend = self.__chart.addLegend(offset=(-15, -15))
             pen = pg.mkPen(color=self.__colour_provider.get_colour(plot_name), width=2, **pen_args)
             self.__plots[plot_name] = self.__chart.plot(x_data, y, pen=pen, name=plot_name)
-            self.__ref_curve_selector.addItem(plot_name)
+            if self.__ref_curve_selector.findText(plot_name) == -1:
+                self.__ref_curve_selector.addItem(plot_name)
 
     @staticmethod
     def __normalise(ref_x, ref_y, data_x, data_y):
@@ -481,28 +506,28 @@ class RTA(VisibleChart):
                 # same max so upsample to the more precise one
                 if data_step < ref_step:
                     new_x = data_x
-                    new_y = data_y - np.interp(ref_x, ref_y, data_x)[1]
+                    new_y = data_y - np.interp(data_x, ref_x, ref_y)[1]
                 else:
                     new_x = ref_x
-                    new_y = data_y - np.interp(data_x, data_y, ref_x)[1]
+                    new_y = data_y - np.interp(ref_x, data_x, data_y)[1]
             elif data_x[-1] > ref_x[-1]:
                 # restrict the self data range to the limits of the target
                 capped_x = data_x[data_x <= ref_x[-1]]
                 capped_y = data_y[0:capped_x.size]
                 if data_step < ref_step:
                     new_x = capped_x
-                    new_y = capped_y - np.interp(ref_x, ref_y, capped_x)[1]
+                    new_y = capped_y - np.interp(capped_x, ref_x, ref_y)[1]
                 else:
                     new_x = ref_x
-                    new_y = np.interp(capped_x, capped_y, ref_x)[1] - ref_y
+                    new_y = np.interp(ref_x, capped_x, capped_y)[1] - ref_y
             else:
                 # restrict the target data range to the limits of the self
                 capped_x = ref_x[ref_x <= data_x[-1]]
                 capped_y = ref_y[0:capped_x.size]
                 if ref_step < data_step:
                     new_x = data_x
-                    new_y = data_y - np.interp(capped_x, capped_y, data_x)[1]
+                    new_y = data_y - np.interp(data_x, capped_x, capped_y)[1]
                 else:
                     new_x = capped_x
-                    new_y = np.interp(data_x, data_y, ref_x)[1] - ref_y
+                    new_y = np.interp(ref_x, data_x, data_y)[1] - ref_y
         return new_x, new_y
