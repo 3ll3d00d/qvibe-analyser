@@ -118,7 +118,7 @@ class RTA(VisibleChart):
             adj = (max_y - min_y) / 2
             if old_curve is None:
                 self.__chart.getPlotItem().setYRange(-adj, adj, padding=0.0)
-            else:
+            elif self.__ref_curve is None:
                 centre = (self.__mag_max() - self.__mag_min()) / 2
                 self.__chart.getPlotItem().setYRange(centre - adj + self.__mag_min(), centre + adj + self.__mag_min(),
                                                      padding=0.0)
@@ -271,20 +271,12 @@ class RTA(VisibleChart):
             else:
                 adjusted_m = m
             self.__target_data = Analysis((f, adjusted_m, adjusted_m))
-            idx = self.__ref_curve_selector.findText(TARGET_PLOT_NAME)
-            if idx == -1:
-                self.__ref_curve_selector.addItem(TARGET_PLOT_NAME)
         else:
             self.__show_target_toggle.setChecked(False)
             self.__show_target_toggle.setEnabled(False)
             self.__target_adjust_db_widget.setValue(0)
             self.__target_adjust_db_widget.setEnabled(False)
             self.__target_data = None
-            idx = self.__ref_curve_selector.findText(TARGET_PLOT_NAME)
-            if idx != -1:
-                if self.__ref_curve == TARGET_PLOT_NAME:
-                    self.__ref_curve_selector.setCurrentIndex(0)
-                self.__ref_curve_selector.removeItem(idx)
         self.__render_target()
 
     def make_event(self, measurement_name, data, idx):

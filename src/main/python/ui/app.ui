@@ -935,12 +935,22 @@
             <item>
              <widget class="QLabel" name="refCurveLabel">
               <property name="text">
-               <string>Reference: </string>
+               <string>Reference Curve: </string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="refCurve"/>
+             <widget class="QComboBox" name="refCurve">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::AdjustToContents</enum>
+              </property>
+             </widget>
             </item>
             <item>
              <spacer name="horizontalSpacer_3">
