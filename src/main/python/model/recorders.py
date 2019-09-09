@@ -28,6 +28,7 @@ class Recorder:
         self.__ip_address = ip_address
         self.__target_config = target_config
         self.signals = RecorderSignals()
+        self.__reset_on_snap = False
         self.__name = None
         self.__reactor = reactor
         self.__listener = None
@@ -184,11 +185,10 @@ class Recorder:
         elif cmd == 'STR':
             pass
         elif rcv == 'ERROR':
-            # TODO reset
-            pass
+            logger.error(f"Received ERROR from {self.ip_address}")
+            self.__reset_on_snap = True
         else:
-            # TODO unknown
-            pass
+            logger.error(f"Received unknown payload from {self.ip_address} - {rcv}")
 
     def disconnect(self):
         ''' Disconnects the listener if we have one. '''
@@ -203,6 +203,9 @@ class Recorder:
         '''
         :return: a 4 entry tuple with the ip of the recorder, copy of the current data, the number of events since the last snap and the snap idx
         '''
+        if self.__reset_on_snap is True:
+            # TODO handle this
+            self.__reset_on_snap = False
         start = time.time()
         b = self.__buffer.unwrap()
         c = self.__buffer.take_event_count()

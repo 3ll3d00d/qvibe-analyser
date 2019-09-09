@@ -5,7 +5,7 @@ import pyqtgraph as pg
 from qtpy.QtWidgets import QMessageBox
 from qtpy.QtCore import Qt
 
-from common import format_pg_plotitem
+from common import format_pg_plotitem, block_signals
 from model.charts import VisibleChart, ChartEvent
 from model.frd import ExportDialog
 from model.preferences import RTA_TARGET
@@ -33,9 +33,12 @@ class RTA(VisibleChart):
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
                  show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
-                 export_frd_button, colour_provider):
+                 export_frd_button, ref_curve_selector, colour_provider):
         self.__show_average = show_average.isChecked()
+        self.__ref_curve_selector = ref_curve_selector
+        self.__ref_curve = None
         self.__plots = {}
+        self.__plot_data = {}
         self.__smooth = False
         self.__colour_provider = colour_provider
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True,
@@ -95,6 +98,21 @@ class RTA(VisibleChart):
         self.reload_target()
         # export
         export_frd_button.clicked.connect(self.__export_frd)
+        # ref curves
+        self.__reset_ref_curve_selector()
+        self.__ref_curve_selector.currentTextChanged.connect(self.__set_reference_curve)
+
+    def __set_reference_curve(self, curve):
+        '''
+        Updates the reference curve.
+        :param curve: the new reference curve.
+        '''
+        new_curve = curve if curve != '' else None
+        if self.__ref_curve != new_curve:
+            logger.info(f"Updating reference curve from {self.__ref_curve} to {new_curve}")
+            self.__ref_curve = new_curve
+            self.update_chart(self.__ref_curve)
+            self.update_all_plots()
 
     def __export_frd(self):
         '''
@@ -265,7 +283,15 @@ class RTA(VisibleChart):
         '''
         for c in self.__plots.values():
             self.__chart.removeItem(c)
+        self.__reset_ref_curve_selector()
+        self.__ref_curve = None
         self.__plots = {}
+        self.__plot_data = {}
+
+    def __reset_ref_curve_selector(self):
+        with block_signals(self.__ref_curve_selector):
+            self.__ref_curve_selector.clear()
+            self.__ref_curve_selector.addItem('')
 
     def update_chart(self, measurement_name):
         '''
@@ -387,7 +413,13 @@ class RTA(VisibleChart):
         '''
         self.__chart.removeItem(self.__plots[name])
         del self.__plots[name]
+        del self.__plot_data[name]
         self.__legend.removeItem(name)
+        idx = self.__ref_curve_selector.findText(name)
+        if idx > -1:
+            if self.__ref_curve_selector.currentIndex() == idx:
+                self.__ref_curve_selector.setCurrentIndex(0)
+            self.__ref_curve_selector.removeItem(idx)
 
     def __show_or_remove_analysis(self, plot_name, measurement_name, axis, x_data, y_data, pen_args):
         '''
@@ -414,6 +446,11 @@ class RTA(VisibleChart):
         :param x_data: x.
         :param y: y.
         '''
+        self.__plot_data[plot_name] = x_data, y
+        if self.__ref_curve is not None:
+            if self.__ref_curve in self.__plot_data:
+                ref_plot_data = self.__plot_data[self.__ref_curve]
+                x_data, y = self.__normalise(ref_plot_data[0], ref_plot_data[1], x_data, y)
         if plot_name in self.__plots:
             self.__plots[plot_name].setData(x_data, y)
         else:
@@ -421,3 +458,51 @@ class RTA(VisibleChart):
                 self.__legend = self.__chart.addLegend(offset=(-15, -15))
             pen = pg.mkPen(color=self.__colour_provider.get_colour(plot_name), width=2, **pen_args)
             self.__plots[plot_name] = self.__chart.plot(x_data, y, pen=pen, name=plot_name)
+            self.__ref_curve_selector.addItem(plot_name)
+
+    @staticmethod
+    def __normalise(ref_x, ref_y, data_x, data_y):
+        '''
+        Creates a new dataset which shows the delta between the data and the reference.
+        :param ref_x: the ref x values.
+        :param ref_y: the ref y values.
+        :param data_x: the data x values.
+        :param data_y: the data y values.
+        :return: the resulting normalised x and y values.
+        '''
+        ref_step = ref_x[1] - ref_x[0]
+        data_step = data_x[1] - data_x[0]
+        if ref_step == data_step:
+            count = min(ref_x.size, data_x.size) - 1
+            new_x = data_x[0:count]
+            new_y = data_y[0:count] - ref_y[0:count]
+        else:
+            if data_x[-1] == ref_x[-1]:
+                # same max so upsample to the more precise one
+                if data_step < ref_step:
+                    new_x = data_x
+                    new_y = data_y - np.interp(ref_x, ref_y, data_x)[1]
+                else:
+                    new_x = ref_x
+                    new_y = data_y - np.interp(data_x, data_y, ref_x)[1]
+            elif data_x[-1] > ref_x[-1]:
+                # restrict the self data range to the limits of the target
+                capped_x = data_x[data_x <= ref_x[-1]]
+                capped_y = data_y[0:capped_x.size]
+                if data_step < ref_step:
+                    new_x = capped_x
+                    new_y = capped_y - np.interp(ref_x, ref_y, capped_x)[1]
+                else:
+                    new_x = ref_x
+                    new_y = np.interp(capped_x, capped_y, ref_x)[1] - ref_y
+            else:
+                # restrict the target data range to the limits of the self
+                capped_x = ref_x[ref_x <= data_x[-1]]
+                capped_y = ref_y[0:capped_x.size]
+                if ref_step < data_step:
+                    new_x = data_x
+                    new_y = data_y - np.interp(capped_x, capped_y, data_x)[1]
+                else:
+                    new_x = capped_x
+                    new_y = np.interp(data_x, data_y, ref_x)[1] - ref_y
+        return new_x, new_y
