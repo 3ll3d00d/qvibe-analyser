@@ -16,11 +16,11 @@ logger = logging.getLogger('qvibe.charts')
 
 class ChartProcessor(QThread):
 
-    def __init__(self, coelesce=False):
+    def __init__(self, coalesce=False):
         super().__init__()
         self.queue = Queue()
         self.running = True
-        self.__coelesce = coelesce
+        self.__coalesce = coalesce
 
     def stop(self):
         self.running = False
@@ -31,7 +31,7 @@ class ChartProcessor(QThread):
                 event = self.queue.get(timeout=1)
                 if event is not None:
                     self.queue.task_done()
-                    if self.__coelesce is True:
+                    if self.__coalesce is True:
                         events = self.coalesce(event)
                     else:
                         events = [event]
@@ -119,10 +119,10 @@ class ChartSignals(QObject):
 
 class VisibleChart:
 
-    def __init__(self, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, visible, coelesce=False,
-                 analysis_mode='vibration', cache_size=1, cache_purger=lambda c: None):
+    def __init__(self, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
+                 visible, coalesce=False, analysis_mode='vibration', cache_size=1, cache_purger=lambda c: None):
         self.signals = ChartSignals()
-        self.processor = ChartProcessor(coelesce=coelesce)
+        self.processor = ChartProcessor(coalesce=coalesce)
         self.signals.new_data.connect(self.do_update)
         self.__timer = QTimer()
         self.__timer.timeout.connect(self.set_actual_fps)

@@ -35,7 +35,10 @@ class RTA(VisibleChart):
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
                  show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
-                 export_frd_button, ref_curve_selector, colour_provider):
+                 export_frd_button, ref_curve_selector, measurement_store_signals, colour_provider):
+        measurement_store_signals.measurement_added.connect(self.__add_measurement)
+        measurement_store_signals.measurement_deleted.connect(self.__remove_measurement)
+        self.__known_measurements = []
         self.__show_average = show_average.isChecked()
         self.__ref_curve_selector = ref_curve_selector
         self.__ref_curve = None
@@ -44,8 +47,8 @@ class RTA(VisibleChart):
         self.__plot_data = {}
         self.__smooth = False
         self.__colour_provider = colour_provider
-        super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, False, coelesce=True,
-                         cache_size=-1, cache_purger=self.__purge_cache)
+        super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
+                         False, coalesce=True, cache_size=-1, cache_purger=self.__purge_cache)
         self.__peak_cache = {}
         self.__hold_secs = hold_secs.value()
         self.__show_peak = show_peak.isChecked()
@@ -103,6 +106,21 @@ class RTA(VisibleChart):
         export_frd_button.clicked.connect(self.__export_frd)
         # ref curves
         self.__ref_curve_selector.currentTextChanged.connect(self.__set_reference_curve)
+
+    def __add_measurement(self, measurement):
+        '''
+        Adds the measurement to the ref curve selector.
+        :param measurement: the measurement.
+        '''
+        self.__known_measurements.append(measurement.key)
+
+    def __remove_measurement(self, measurement):
+        '''
+        Remove the measurement from the ref curve.
+        :param measurement: the measurement.
+        '''
+        self.__known_measurements.remove(measurement.key)
+        self.__remove_from_ref_curve(measurement.key)
 
     def __set_reference_curve(self, curve):
         '''
@@ -431,6 +449,13 @@ class RTA(VisibleChart):
         del self.__plots[name]
         del self.__plot_data[name]
         self.__legend.removeItem(name)
+        self.__remove_from_ref_curve(name)
+
+    def __remove_from_ref_curve(self, name):
+        '''
+        Removes the named item from the ref curve selector.
+        :param name: the name.
+        '''
         idx = self.__ref_curve_selector.findText(name)
         if idx > -1:
             if self.__ref_curve_selector.currentIndex() == idx:
@@ -450,22 +475,29 @@ class RTA(VisibleChart):
         '''
         if self.is_visible(measurement=measurement_name, axis=axis) is True:
             y = smooth_savgol(x_data, y_data, wl=self.__sg_wl, poly=self.__sg_poly)[1] if self.__smooth is True else y_data
-            self.__render_or_update(pen_args, plot_name, x_data, y)
+            self.__render_or_update(pen_args, plot_name, x_data, y, axis=axis)
         elif plot_name in self.__plots:
             self.__remove_named_plot(plot_name)
 
-    def __render_or_update(self, pen_args, plot_name, x_data, y):
+    def __render_or_update(self, pen_args, plot_name, x_data, y, axis=None):
         '''
         actually updates (or creates) the plot.
         :param pen_args: the pen args.
         :param plot_name: the plot name.
         :param x_data: x.
         :param y: y.
+        :param axis: the axis.
         '''
         self.__plot_data[plot_name] = x_data, y
         if self.__ref_curve is not None:
-            if self.__ref_curve in self.__plot_data:
-                ref_plot_data = self.__plot_data[self.__ref_curve]
+            ref_plot_name = None
+            if self.__ref_curve in self.__known_measurements:
+                if axis is not None:
+                    ref_plot_name = f"{self.__ref_curve}:{axis}"
+            elif self.__ref_curve in self.__plot_data:
+                ref_plot_name = self.__ref_curve
+            if ref_plot_name in self.__plot_data:
+                ref_plot_data = self.__plot_data[ref_plot_name]
                 x_data, y = self.__normalise(ref_plot_data[0], ref_plot_data[1], x_data, y)
         if plot_name in self.__plots:
             self.__plots[plot_name].setData(x_data, y)
@@ -475,6 +507,10 @@ class RTA(VisibleChart):
             pen = pg.mkPen(color=self.__colour_provider.get_colour(plot_name), width=2, **pen_args)
             self.__plots[plot_name] = self.__chart.plot(x_data, y, pen=pen, name=plot_name)
             if self.__ref_curve_selector.findText(plot_name) == -1:
+                m_name = next((m for m in self.__known_measurements if plot_name.startswith(f"{m}:")), None)
+                if m_name is not None:
+                    if self.__ref_curve_selector.findText(m_name) == -1:
+                        self.__ref_curve_selector.addItem(m_name)
                 self.__ref_curve_selector.addItem(plot_name)
 
     @staticmethod
