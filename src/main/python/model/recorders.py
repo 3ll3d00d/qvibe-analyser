@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import time
 from collections import Sequence
 
@@ -174,6 +175,10 @@ class Recorder:
             if self.recording is True:
                 records = np.array([np.fromstring(r, sep='#', dtype=np.float64) for r in dat.split('|')])
                 logger.debug(f"Buffering DAT {records[0,0]} - {records[-1,0]}")
+                # if the last record has a sample idx less than the first one then it must have suffered an overflow
+                if len(self.__buffer) > 0 and records[:, 0][-1] <= records[:, 0][0]:
+                    logger.error(f"Sensor {self.ip_address} has overflowed")
+                    self.__reset_on_snap = True
                 self.__buffer.extend(records)
         elif cmd == 'DST':
             logger.info(f"Received DST {dat}")
@@ -201,10 +206,15 @@ class Recorder:
 
     def snap(self):
         '''
-        :return: a 4 entry tuple with the ip of the recorder, copy of the current data, the number of events since the last snap and the snap idx
+        :return: a 5 entry tuple with
+        - the ip of the recorder
+        - copy of the current data
+        - the number of events since the last snap
+        - the snap idx
+        - whether the sensor has overflowed since the last snap
         '''
+        errored = self.__reset_on_snap
         if self.__reset_on_snap is True:
-            # TODO handle this
             self.__reset_on_snap = False
         start = time.time()
         b = self.__buffer.unwrap()
@@ -212,7 +222,7 @@ class Recorder:
         self.__snap_idx += 1
         end = time.time()
         logger.debug(f"Snap {self.__snap_idx} : {c} in {to_millis(start, end)}ms")
-        return self.ip_address, b, c, self.__snap_idx
+        return self.ip_address, b, c, self.__snap_idx, errored
 
     def reset(self):
         self.__buffer = self.__make_new_buffer()

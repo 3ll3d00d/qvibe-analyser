@@ -309,8 +309,14 @@ class QVibe(QMainWindow, Ui_MainWindow):
         elapsed = round((time.time() * 1000) - self.__start_time)
         new_time = QTime(0, 0, 0, 0).addMSecs(elapsed)
         self.elapsedTime.setTime(new_time)
-        for recorder_name, signal, count, idx in self.__recorder_store.snap():
+        for recorder_name, signal, count, idx, errored in self.__recorder_store.snap():
             if count > 0:
+                if errored is True:
+                    msg_box = QMessageBox()
+                    msg_box.setText(f"{recorder_name} has suffered an overflow, data will be unreliable")
+                    msg_box.setIcon(QMessageBox.Critical)
+                    msg_box.setWindowTitle('Overflow')
+                    msg_box.exec()
                 self.__measurement_store.add('rta', recorder_name, signal, idx)
 
     def update_target(self):
