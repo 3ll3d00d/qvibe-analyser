@@ -257,6 +257,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         '''
         Wipes all data from the recorders and the charts.
         '''
+        self.__measurement_store.remove_rta()
         self.__recorder_store.reset()
         for c in self.__analysers.values():
             c.reset()

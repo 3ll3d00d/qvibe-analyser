@@ -84,6 +84,12 @@ class MeasurementStore:
             self.__parent_layout.addItem(self.__spacer_item)
             self.signals.measurement_added.emit(m)
 
+    def remove_rta(self):
+        ''' removes all rta measurements. '''
+        to_remove = [m for m in self if m.name == 'rta']
+        for m in to_remove:
+            self.__delete(m)
+
     def remove(self, name, ip):
         '''
         Deletes the measurement.
