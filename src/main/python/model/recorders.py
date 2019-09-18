@@ -173,13 +173,21 @@ class Recorder:
         dat = data[4:]
         if cmd == 'DAT':
             if self.recording is True:
-                records = np.array([np.fromstring(r, sep='#', dtype=np.float64) for r in dat.split('|')])
-                logger.debug(f"Buffering DAT {records[0,0]} - {records[-1,0]}")
-                # if the last record has a sample idx less than the first one then it must have suffered an overflow
-                if len(self.__buffer) > 0 and records[:, 0][-1] <= records[:, 0][0]:
-                    logger.error(f"Sensor {self.ip_address} has overflowed")
+                if len(dat) > 0:
+                    records = np.array([np.fromstring(r, sep='#', dtype=np.float64) for r in dat.split('|')])
+                    if records.size > 0:
+                        logger.debug(f"Buffering DAT {records[0,0]} - {records[-1,0]}")
+                        # if the last record has a sample idx less than the first one then it must have suffered an overflow
+                        if len(self.__buffer) > 0 and records[:, 0][-1] <= records[:, 0][0]:
+                            logger.error(f"Sensor {self.ip_address} has overflowed")
+                            self.__reset_on_snap = True
+                        self.__buffer.extend(records)
+                    else:
+                        logger.error(f"Received empty array {dat}")
+                        self.__reset_on_snap = True
+                else:
+                    logger.error(f"Received empty array {dat}")
                     self.__reset_on_snap = True
-                self.__buffer.extend(records)
         elif cmd == 'DST':
             logger.info(f"Received DST {dat}")
             if RecorderConfig.from_dict(json.loads(dat)[0]) == self.__target_config:

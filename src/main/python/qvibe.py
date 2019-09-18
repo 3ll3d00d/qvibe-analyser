@@ -313,7 +313,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
             if count > 0:
                 if errored is True:
                     msg_box = QMessageBox()
-                    msg_box.setText(f"{recorder_name} has suffered an overflow, data will be unreliable")
+                    msg_box.setText(f"{recorder_name} has overflowed, data will be unreliable \n\n If this occurs repeatedly, try increasing batch size or reducing sample rate via the Sensor Config panel")
                     msg_box.setIcon(QMessageBox.Critical)
                     msg_box.setWindowTitle('Overflow')
                     msg_box.exec()
