@@ -68,8 +68,15 @@ class MeasurementStore:
         '''
         idx = next((idx for idx, m in enumerate(self) if m.name == name and m.ip == ip), None)
         if idx is not None:
-            self.__measurements[idx].idx = data_idx
-            self.__measurements[idx].data = data
+            m = self.__measurements[idx]
+            m.idx = data_idx
+            added_emit = m.data is None and data is not None
+            removed_emit = m.data is not None and data is None
+            m.data = data
+            if added_emit is True:
+                self.signals.measurement_added.emit(m)
+            if removed_emit is True:
+                self.signals.measurement_deleted.emit(m)
         else:
             m = Measurement(name, ip, data, data_idx, self.signals)
             self.__measurements.append(m)
@@ -82,7 +89,8 @@ class MeasurementStore:
                 ui.render(m)
                 self.__uis.append(ui)
             self.__parent_layout.addItem(self.__spacer_item)
-            self.signals.measurement_added.emit(m)
+            if data is not None:
+                self.signals.measurement_added.emit(m)
 
     def remove_rta(self):
         ''' removes all rta measurements. '''
@@ -112,7 +120,8 @@ class MeasurementStore:
             ui = self.__uis.pop(idx)
             ui.delete()
             self.__uis.append(ui)
-            self.signals.measurement_deleted.emit(m)
+            if m.data is not None:
+                self.signals.measurement_deleted.emit(m)
             if measurement.name.startswith('snapshot'):
                 self.preferences.clear(f"{SNAPSHOT_GROUP}/{m.name[8:]}/{m.ip}")
 
