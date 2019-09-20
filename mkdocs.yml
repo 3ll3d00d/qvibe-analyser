@@ -1,0 +1,21 @@
+site_name: qvibe
+site_url: 'https://qvibe.readthedocs.io'
+copyright: 'Copyright &copy; 2019 Matt Khan'
+theme:
+  name: 'material'
+  logo: 'img/icon.png'
+  favicon: 'img/icon.ico'
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.superfences
+extra:
+  disqus: qvibe
+nav:
+  - Introduction: index.md
+  - User Guide:
+      - 'Getting Started':
+          - 'Prerequisites': prereqs.md
+          - 'Recorder Setup': recorder.md
+          - 'Analyser Setup': analyser.md
