@@ -241,6 +241,16 @@ class TimeAxisItem(pg.AxisItem):
         return [str(datetime.timedelta(seconds=value)).split('.')[0] for value in values]
 
 
+def bump_tick_levels(axis, minVal, maxVal, size):
+    ''' a workaround for not being able to control grid line alpha directly. '''
+    real_levels = axis.tickSpacing(minVal, maxVal, size)
+    return [
+        real_levels[2],
+        real_levels[2],
+        real_levels[2]
+    ]
+
+
 def format_pg_plotitem(plot, x_lim, y_lim, x_range=None, y_range=None):
     '''
     Applies a standard format to a pyqtgraph chart.
@@ -251,7 +261,7 @@ def format_pg_plotitem(plot, x_lim, y_lim, x_range=None, y_range=None):
     :param y_range: the visible y limits.
     '''
     label_font = QFont()
-    label_font.setPointSize(7)
+    label_font.setPointSize(9)
     label_font.setFamily('DejaVu Sans')
     for name in ['left', 'right', 'bottom', 'top']:
         plot.getAxis(name).setTickFont(label_font)

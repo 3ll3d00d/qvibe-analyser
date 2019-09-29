@@ -27,7 +27,7 @@ from qtpy import QtCore
 from qtpy.QtCore import QTimer, QSettings, QThreadPool, QUrl, QTime, QRunnable, QThread
 from qtpy.QtGui import QIcon, QFont, QDesktopServices
 from qtpy.QtWidgets import QMainWindow, QApplication, QErrorMessage, QMessageBox, QFileDialog
-from common import block_signals, ReactorRunner, np_to_str, parse_file
+from common import block_signals, ReactorRunner, np_to_str, parse_file, bump_tick_levels
 from model.preferences import SYSTEM_CHECK_FOR_BETA_UPDATES, SYSTEM_CHECK_FOR_UPDATES, SCREEN_GEOMETRY, \
     SCREEN_WINDOW_STATE, PreferencesDialog, Preferences, BUFFER_SIZE, ANALYSIS_RESOLUTION, CHART_MAG_MIN, \
     CHART_MAG_MAX, keep_range, CHART_FREQ_MIN, CHART_FREQ_MAX, SNAPSHOT_GROUP
@@ -569,14 +569,23 @@ if __name__ == '__main__':
 
 class PlotWidgetForSpectrum(pg.PlotWidget):
     def __init__(self, parent=None, background='default', **kargs):
-        super().__init__(parent=parent, background=background, **kargs)
+        super().__init__(parent=parent,
+                         background=background,
+                         axisItems={
+                             'bottom': MinorLevelsAxisItem(orientation='bottom'),
+                             'left': MinorLevelsAxisItem(orientation='left')
+                         },
+                         **kargs)
 
 
 class PlotWidgetWithDateAxis(pg.PlotWidget):
     def __init__(self, parent=None, background='default', **kargs):
         super().__init__(parent=parent,
                          background=background,
-                         axisItems={'bottom': TimeAxisItem(orientation='bottom')},
+                         axisItems={
+                             'bottom': TimeAxisItem(orientation='bottom'),
+                             'left': MinorLevelsAxisItem(orientation='left')
+                         },
                          **kargs)
 
 
@@ -596,7 +605,14 @@ class Inverse(pg.AxisItem):
         return values[::-1]
 
 
-class TimeAxisItem(pg.AxisItem):
+class MinorLevelsAxisItem(pg.AxisItem):
+
+    def tickSpacing(self, minVal, maxVal, size):
+        return bump_tick_levels(super(), minVal, maxVal, size)
+
+
+class TimeAxisItem(MinorLevelsAxisItem):
+
     def tickStrings(self, values, scale, spacing):
         import datetime
         return [str(datetime.timedelta(seconds=value)).split('.')[0] for value in values]
