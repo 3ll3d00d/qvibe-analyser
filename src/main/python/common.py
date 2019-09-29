@@ -244,12 +244,14 @@ class TimeAxisItem(pg.AxisItem):
 def bump_tick_levels(axis, minVal, maxVal, size):
     ''' a workaround for not being able to control grid line alpha directly. '''
     real_levels = axis.tickSpacing(minVal, maxVal, size)
-    return [
-        real_levels[2],
-        real_levels[2],
-        real_levels[2]
-    ]
-
+    if len(real_levels) == 3:
+        return [
+            real_levels[2],
+            real_levels[2],
+            real_levels[2]
+        ]
+    else:
+        return real_levels
 
 def format_pg_plotitem(plot, x_lim, y_lim, x_range=None, y_range=None):
     '''

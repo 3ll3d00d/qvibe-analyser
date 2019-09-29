@@ -35,7 +35,7 @@ class RTA(VisibleChart):
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
                  show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
-                 export_frd_button, ref_curve_selector, measurement_store_signals, colour_provider):
+                 export_frd_button, ref_curve_selector, measurement_store_signals, toggle_crosshairs, colour_provider):
         measurement_store_signals.measurement_added.connect(self.__add_measurement)
         measurement_store_signals.measurement_deleted.connect(self.__remove_measurement)
         self.__known_measurements = []
@@ -47,6 +47,9 @@ class RTA(VisibleChart):
         self.__plot_data = {}
         self.__smooth = False
         self.__colour_provider = colour_provider
+        self.__move_crosshairs = False
+        toggle_crosshairs.setToolTip('Press CTRL+T to toggle')
+        toggle_crosshairs.toggled[bool].connect(self.__toggle_crosshairs)
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          False, coalesce=True, cache_size=-1, cache_purger=self.__purge_cache)
         self.__peak_cache = {}
@@ -106,6 +109,23 @@ class RTA(VisibleChart):
         export_frd_button.clicked.connect(self.__export_frd)
         # ref curves
         self.__ref_curve_selector.currentTextChanged.connect(self.__set_reference_curve)
+        # crosshairs
+        v_line = pg.InfiniteLine(angle=90, movable=False, label='[{value:0.1f}]', labelOpts={'position': 0.95})
+        h_line = pg.InfiniteLine(angle=0, movable=False, label='[{value:0.1f}]', labelOpts={'position': 0.95})
+        self.__chart.getPlotItem().addItem(v_line, ignoreBounds=True)
+        self.__chart.getPlotItem().addItem(h_line, ignoreBounds=True)
+
+        def mouse_moved(evt):
+            pos = evt[0]
+            if self.__chart.getPlotItem().sceneBoundingRect().contains(pos) and self.__move_crosshairs is True:
+                mouse_point = self.__chart.getPlotItem().vb.mapSceneToView(pos)
+                v_line.setPos(mouse_point.x())
+                h_line.setPos(mouse_point.y())
+
+        self.__proxy = pg.SignalProxy(self.__chart.scene().sigMouseMoved, delay=0.125, rateLimit=20, slot=mouse_moved)
+
+    def __toggle_crosshairs(self, move_crosshairs):
+        self.__move_crosshairs = move_crosshairs
 
     def __add_measurement(self, measurement):
         '''

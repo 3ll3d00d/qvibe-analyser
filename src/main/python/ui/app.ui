@@ -33,8 +33,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>199</width>
-           <height>420</height>
+           <width>198</width>
+           <height>473</height>
           </rect>
          </property>
          <attribute name="label">
@@ -138,8 +138,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>199</width>
-           <height>420</height>
+           <width>198</width>
+           <height>473</height>
           </rect>
          </property>
          <attribute name="label">
@@ -236,8 +236,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>199</width>
-           <height>420</height>
+           <width>198</width>
+           <height>473</height>
           </rect>
          </property>
          <attribute name="label">
@@ -380,8 +380,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>199</width>
-           <height>420</height>
+           <width>198</width>
+           <height>473</height>
           </rect>
          </property>
          <attribute name="label">
@@ -564,8 +564,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>199</width>
-           <height>420</height>
+           <width>198</width>
+           <height>473</height>
           </rect>
          </property>
          <attribute name="label">
@@ -919,6 +919,19 @@
              </spacer>
             </item>
             <item>
+             <widget class="QPushButton" name="toggleCrosshairs">
+              <property name="text">
+               <string>Move Crosshairs</string>
+              </property>
+              <property name="shortcut">
+               <string>Ctrl+T</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QToolButton" name="exportFRD">
               <property name="text">
                <string>...</string>
@@ -991,7 +1004,7 @@
      <x>0</x>
      <y>0</y>
      <width>1426</width>
-     <height>30</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuSettings">
