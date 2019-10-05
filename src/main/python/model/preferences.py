@@ -235,11 +235,23 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
             self.recorderIP.setFocus(Qt.OtherFocusReason)
         self.deleteRecorderButton.setEnabled(enable_delete)
         self.addRecorderButton.setEnabled(False)
+        self.__reset_target_buttons()
+        self.clearTarget.setIcon(qta.icon('fa5s.times', color='red'))
+        self.loadTarget.setIcon(qta.icon('fa5s.folder-open'))
+        self.createTarget.setIcon(qta.icon('fa5s.bezier-curve'))
+        self.createTarget.setToolTip('Draw a target curve')
+        self.createTarget.clicked.connect(self.__create_target)
+
+    def __reset_target_buttons(self):
         has_target = self.__preferences.has(RTA_TARGET)
         self.clearTarget.setEnabled(has_target)
         self.targetSet.setChecked(has_target)
-        self.clearTarget.setIcon(qta.icon('fa5s.times', color='red'))
-        self.loadTarget.setIcon(qta.icon('fa5s.folder-open'))
+
+    def __create_target(self):
+        from model.target import CreateTargetDialog
+        dialog = CreateTargetDialog(self, self.__preferences, fs=self.__preferences.get(RECORDER_TARGET_FS))
+        dialog.exec()
+        self.__reset_target_buttons()
 
     def __balance_mag(self, val):
         keep_range(self.magMin, self.magMax, 10)
@@ -382,7 +394,7 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
                 c = f.read(1)
                 if not c.isalnum():
                     comment_char = c
-            f, m = np.genfromtxt(file_name, comments=comment_char, unpack=True)
+            f, m = np.genfromtxt(file_name, comments=comment_char, unpack=True, usecols=(0, 1))
             arr = np.vstack((f, m))
             return file_name, np_to_str(arr)
         return None, None

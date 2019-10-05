@@ -13,7 +13,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_preferencesDialog(object):
     def setupUi(self, preferencesDialog):
         preferencesDialog.setObjectName("preferencesDialog")
-        preferencesDialog.resize(642, 578)
+        preferencesDialog.resize(490, 426)
         self.verticalLayout = QtWidgets.QVBoxLayout(preferencesDialog)
         self.verticalLayout.setObjectName("verticalLayout")
         self.panes = QtWidgets.QVBoxLayout()
@@ -85,6 +85,9 @@ class Ui_preferencesDialog(object):
         self.clearTarget = QtWidgets.QToolButton(preferencesDialog)
         self.clearTarget.setObjectName("clearTarget")
         self.targetLayout.addWidget(self.clearTarget)
+        self.createTarget = QtWidgets.QToolButton(preferencesDialog)
+        self.createTarget.setObjectName("createTarget")
+        self.targetLayout.addWidget(self.createTarget)
         self.targetSet = QtWidgets.QCheckBox(preferencesDialog)
         self.targetSet.setEnabled(False)
         self.targetSet.setObjectName("targetSet")
@@ -263,6 +266,7 @@ class Ui_preferencesDialog(object):
         self.spectroScaleFactorLabel.setText(_translate("preferencesDialog", "Scale  Factor"))
         self.loadTarget.setText(_translate("preferencesDialog", "..."))
         self.clearTarget.setText(_translate("preferencesDialog", "..."))
+        self.createTarget.setText(_translate("preferencesDialog", "..."))
         self.targetSet.setText(_translate("preferencesDialog", "Set?"))
         self.spectroScaleAlgo.setItemText(0, _translate("preferencesDialog", "Nearest"))
         self.spectroScaleAlgo.setItemText(1, _translate("preferencesDialog", "Bilinear"))
