@@ -15,7 +15,13 @@ extra:
 nav:
   - Introduction: index.md
   - User Guide:
-      - 'Getting Started':
+      - 'Setup':
           - 'Prerequisites': prereqs.md
-          - 'Recorder Setup': recorder.md
-          - 'Analyser Setup': analyser.md
+          - 'Recorder': recorder.md
+          - 'Analyser': analyser.md
+      - 'User Interface':
+          - 'The Main Window': main_window.md
+          - 'Preferences': preferences.md
+      - 'Workflow':
+          - 'Calibrating': calibration.md
+          - 'Content Tracking': content_tracking.md

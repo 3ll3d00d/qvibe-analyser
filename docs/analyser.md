@@ -1,4 +1,6 @@
-## Installation
+## Getting Started
+
+### Installation
 
 Releases are hosted on github, the latest official release will always be available via the [github releases page](https://github.com/3ll3d00d/qvibe-analyser/releases/latest)
 
@@ -15,9 +17,25 @@ qvibe-analyser.app.zip | OSX | An OSX app bundle
 
 To use, simply download one of the above binaries and run it.
 
-### Checking for Updates
+### Initial Setup
 
-Release notes and download links are accessible via the *Help > Release Notes* menu item. This is also displayed on startup if a new version is detected and the github release api is accessible.
+When the analyser is launched for the first time, it will ask you to tell it where the recorder lives on the network.
+
+![Say Yes](./img/no_recorders.png)
+
+Click Yes and the [preferences](./preferences.md) dialog will be displayed
+
+![Prefs](./img/preferences.png) 
+
+Enter the recorder IP address and port into the `Address` field and click the plus button. Click save to continue.
+
+The analyser is now ready to use.
+
+## Upgrading
+
+### Release Notes
+
+Release notes and download links are accessible via the *Help > Release Notes* menu item. This is also displayed on startup if a new version is detected (and the computer can reach the internet).
 
 ![New Version](./img/new_version.png)
 
@@ -28,6 +46,14 @@ Multiple rows can be selected to see what has changed in each release.
 ![Many Releases](./img/show_release_notes.png)
 
 If a binary is available for your operating system for any selected release, the download link will be provided alongside the release notes.
+
+### Beta Releases
+
+Beta releases are published more regularly than official releases. Beta releases provide early access to new or experimental features. Review the release notes for any particular beta release for more details.
+
+They can be found via the full release page on [github](https://github.com/3ll3d00d/qvibe-analyser/releases).
+
+## OS Specific Differences
 
 ### Is there any difference between qvibe-analyser.exe and qvibe-analyserSetup.exe?
 
@@ -53,8 +79,3 @@ Builds are created and published from tags in the repo.
 
 This approach means the binaries are completely reproducible by anyone so feel free to make your own or run from source if you do not wish to trust the published binaries.
     
-## Beta Releases
-
-Beta releases are published more regularly than official releases. Beta releases provide early access to new or experimental features. Review the release notes for any particular beta release for more details.
-
-They can be found via the full release page on [github](https://github.com/3ll3d00d/qvibe-analyser/releases).
