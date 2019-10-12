@@ -8,7 +8,7 @@ from qtpy import QtWidgets, QtCore
 from qtpy.QtWidgets import QFileDialog
 from qtpy.QtCore import QObject, Signal
 
-from common import np_to_str
+from common import np_to_str, RingBuffer
 from model.preferences import SNAPSHOT_GROUP
 
 logger = logging.getLogger('qvibe.measurements')
@@ -22,17 +22,36 @@ class MeasurementStoreSignals(QObject):
 
 
 class MeasurementStore:
-    def __init__(self, parent_layout, parent_widget, preferences):
+    def __init__(self, parent_layout, parent_widget, buffer_size_widget, preferences, target_config):
         self.signals = MeasurementStoreSignals()
         self.preferences = preferences
         self.__parent_layout = parent_layout
         self.__parent_widget = parent_widget
+        self.__target_config = target_config
         self.__measurements = []
         self.__uis = []
         self.__spacer_item = QtWidgets.QSpacerItem(20, 40,
                                                    QtWidgets.QSizePolicy.Minimum,
                                                    QtWidgets.QSizePolicy.Expanding)
         self.__parent_layout.addItem(self.__spacer_item)
+        self.__buffer_size_seconds = None
+        buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
+        self.__on_buffer_size_change(buffer_size_widget.value())
+
+    @property
+    def target_config(self):
+        return self.__target_config
+
+    @target_config.setter
+    def target_config(self, target_config):
+        self.__target_config = target_config
+        for m in self.__measurements:
+            m.target_config = target_config
+
+    def __on_buffer_size_change(self, size):
+        self.__buffer_size_seconds = size
+        for m in self.__measurements:
+            m.reset_buffer_size(size)
 
     def __iter__(self):
         return iter(self.__measurements)
@@ -57,28 +76,30 @@ class MeasurementStore:
         return [m.key for m in self.__measurements if m.visible is True]
 
     def add_snapshot(self, id, ip, data):
-        self.add(f"snapshot{id}", ip, data)
+        self.append(f"snapshot{id}", ip, data)
 
-    def add(self, name, ip, data, data_idx=-1):
+    def append(self, name, ip, data, data_idx=-1):
         '''
         Puts the named measurement in the store.
         :param name: the measurement name.
         :param ip: the ip address.
         :param data: the associated data.
+        :param count: the amount of samples in the latest update.
         '''
         idx = next((idx for idx, m in enumerate(self) if m.name == name and m.ip == ip), None)
         if idx is not None:
             m = self.__measurements[idx]
             m.idx = data_idx
-            added_emit = m.data is None and data is not None
-            removed_emit = m.data is not None and data is None
-            m.data = data
+            added_emit = len(m.data) == 0 and data is not None
+            removed_emit = len(m.data) > 0 and data is None
+            if data is not None:
+                m.append(data)
             if added_emit is True:
                 self.signals.measurement_added.emit(m)
             if removed_emit is True:
                 self.signals.measurement_deleted.emit(m)
         else:
-            m = Measurement(name, ip, data, data_idx, self.signals)
+            m = Measurement(name, ip, data, data_idx, self.signals, self.__buffer_size_seconds, self.target_config)
             self.__measurements.append(m)
             self.__parent_layout.removeItem(self.__spacer_item)
             if len(self.__uis) >= len(self.__measurements):
@@ -91,6 +112,12 @@ class MeasurementStore:
             self.__parent_layout.addItem(self.__spacer_item)
             if data is not None:
                 self.signals.measurement_added.emit(m)
+
+    def snap_rta(self):
+        '''
+        :return: the snapped RTA data.
+        '''
+        return {m.ip: m.data.unwrap() for m in self if m.name == 'rta' and len(m.data) > 0}
 
     def remove_rta(self):
         ''' removes all rta measurements. '''
@@ -141,14 +168,35 @@ class MeasurementStore:
 
 class Measurement:
 
-    def __init__(self, name, ip, data, idx, signals, visible=True):
+    def __init__(self, name, ip, data, idx, signals, buffer_size, target_config, visible=True):
         self.__name = name
+        self.__target_config = target_config
         self.__ip = ip
-        self.__data = data
+        self.__buffer_size = buffer_size
+        self.__snap_idx = 0
+        self.__data = self.__make_new_buffer()
+        self.__len = 0
         self.__visible = visible
         self.__idx = idx
         self.__signals = signals
         self.__ui = None
+        if data is not None:
+            self.append(data, emit=False)
+
+    def __make_new_buffer(self):
+        return RingBuffer(self.__target_config.fs * self.__buffer_size,
+                          dtype=(np.float64, self.__target_config.value_len))
+
+    def reset_buffer_size(self, buffer_size):
+        '''
+        Replaces the buffer with a new buffer that can hold the specified amount of time data.
+        :param buffer_size: the new size (in seconds).
+        '''
+        self.__buffer_size = buffer_size
+        dat = self.__data.unwrap()
+        new_buf = self.__make_new_buffer()
+        new_buf.extend(dat)
+        self.__data = new_buf
 
     @property
     def key(self):
@@ -166,10 +214,14 @@ class Measurement:
     def data(self):
         return self.__data
 
-    @data.setter
-    def data(self, data):
-        self.__data = data
-        self.__signals.data_changed.emit(self)
+    @property
+    def latest_data(self):
+        return self.__data[-1] if len(self.__data) > 0 else None
+
+    def append(self, data, emit=True):
+        self.__data.extend(data)
+        if emit is True:
+            self.__signals.data_changed.emit(self)
 
     @property
     def idx(self):
@@ -187,6 +239,15 @@ class Measurement:
     def visible(self, visible):
         self.__visible = visible
         self.__signals.visibility_changed.emit(self)
+
+    @property
+    def target_config(self):
+        return self.__target_config
+
+    @target_config.setter
+    def target_config(self, target_config):
+        if target_config != self.__target_config:
+            self.__target_config = target_config
 
     def __repr__(self):
         return f"{self.name}:{self.ip}:{self.idx}:{self.visible}"

@@ -24,7 +24,7 @@ class RecorderSignals(QObject):
 
 class Recorder:
 
-    def __init__(self, ip_address, idx, buffer_size, parent_layout, parent, target_config, reactor):
+    def __init__(self, ip_address, idx, parent_layout, parent, target_config, reactor):
         ''' Adds widgets to the main screen to display another recorder. '''
         self.__ip_address = ip_address
         self.__target_config = target_config
@@ -33,9 +33,8 @@ class Recorder:
         self.__name = None
         self.__reactor = reactor
         self.__listener = None
-        self.__buffer_size = buffer_size
         self.__snap_idx = 0
-        self.__buffer = self.__make_new_buffer()
+        self.__buffer = []
         self.__parent_layout = parent_layout
         # init the widgets on screen which control it
         self.__recorder_layout = QtWidgets.QVBoxLayout()
@@ -79,21 +78,6 @@ class Recorder:
         self.__connect_button.setEnabled(not is_connected)
         self.__disconnect_button.setEnabled(is_connected)
         self.signals.on_status_change.emit(self.ip_address, is_connected)
-
-    def __make_new_buffer(self):
-        return RingBuffer(self.__target_config.fs * self.__buffer_size,
-                          dtype=(np.float64, self.__target_config.value_len))
-
-    def reset_buffer_size(self, buffer_size):
-        '''
-        Replaces the buffer with a new buffer that can hold the specified amount of time data.
-        :param buffer_size: the new size (in seconds).
-        '''
-        self.__buffer_size = buffer_size
-        dat = self.__buffer.unwrap()
-        new_buf = self.__make_new_buffer()
-        new_buf.extend(dat)
-        self.__buffer = new_buf
 
     @property
     def ip_address(self):
@@ -216,8 +200,7 @@ class Recorder:
         '''
         :return: a 5 entry tuple with
         - the ip of the recorder
-        - copy of the current data
-        - the number of events since the last snap
+        - data since the last snap
         - the snap idx
         - whether the sensor has overflowed since the last snap
         '''
@@ -225,15 +208,15 @@ class Recorder:
         if self.__reset_on_snap is True:
             self.__reset_on_snap = False
         start = time.time()
-        b = self.__buffer.unwrap()
-        c = self.__buffer.take_event_count()
+        b = np.array(self.__buffer)
+        self.__buffer = []
         self.__snap_idx += 1
         end = time.time()
-        logger.debug(f"Snap {self.__snap_idx} : {c} in {to_millis(start, end)}ms")
-        return self.ip_address, b, c, self.__snap_idx, errored
+        logger.debug(f"Snap {self.__snap_idx} : {b.shape[0]} in {to_millis(start, end)}ms")
+        return self.ip_address, b, self.__snap_idx, errored
 
     def reset(self):
-        self.__buffer = self.__make_new_buffer()
+        self.__buffer = []
 
     def destroy(self):
         logger.info(f"Destroying {self.ip_address}")
@@ -254,7 +237,7 @@ class RecorderStore(Sequence):
     '''
     Stores all recorders known to the system.
     '''
-    def __init__(self, target_config, buffer_size_widget, parent_layout, parent, reactor, measurement_store):
+    def __init__(self, target_config, parent_layout, parent, reactor, measurement_store):
         self.signals = RecorderSignals()
         self.__measurement_store = measurement_store
         self.__parent_layout = parent_layout
@@ -265,15 +248,7 @@ class RecorderStore(Sequence):
         self.__parent = parent
         self.__recorders = []
         self.__target_config = target_config
-        self.__buffer_size = 30
         self.__reactor = reactor
-        buffer_size_widget.valueChanged['int'].connect(self.__on_buffer_size_change)
-        self.__on_buffer_size_change(buffer_size_widget.value())
-
-    def __on_buffer_size_change(self, size):
-        self.__buffer_size = size
-        for r in self.__recorders:
-            r.reset_buffer_size(size)
 
     @property
     def target_config(self):
@@ -288,8 +263,8 @@ class RecorderStore(Sequence):
     def append(self, ip_address):
         ''' adds a new recorder. '''
         self.__parent_layout.removeItem(self.__spacer_item)
-        rec = Recorder(ip_address, len(self.__recorders), self.__buffer_size, self.__parent_layout, self.__parent,
-                       self.__target_config, self.__reactor)
+        rec = Recorder(ip_address, len(self.__recorders), self.__parent_layout, self.__parent, self.__target_config,
+                       self.__reactor)
         self.__parent_layout.addItem(self.__spacer_item)
         rec.signals.on_status_change.connect(self.__on_recorder_connect_event)
         self.__recorders.append(rec)
@@ -308,7 +283,7 @@ class RecorderStore(Sequence):
             if next((r for r in self if r.ip_address == ip), None) is None:
                 logger.info(f"Loading new recorder at {ip}")
                 self.append(ip)
-                self.__measurement_store.add('rta', ip, None)
+                self.__measurement_store.append('rta', ip, None)
 
         to_remove = [r for r in self if r.ip_address not in ip_addresses]
         for r in to_remove:

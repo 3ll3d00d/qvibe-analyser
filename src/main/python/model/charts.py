@@ -70,7 +70,8 @@ class ChartProcessor(QThread):
 
 class ChartEvent:
     ''' Allows preprocessing of fresh data for a chart to occur away from the main thread. '''
-    def __init__(self, chart, measurement_name, input, idx, preferences, budget_millis, analysis_mode='vibration'):
+    def __init__(self, chart, measurement_name, input, idx, preferences, budget_millis,
+                 analysis_mode='vibration'):
         super().__init__()
         self.chart = chart
         self.measurement_name = measurement_name

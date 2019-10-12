@@ -114,6 +114,7 @@ class Spectrogram(VisibleChart):
 
     def __create_charts(self, measurement_name):
         ''' Creates a new set of charts for the named measurement. '''
+        logger.info(f"Creating charts for {measurement_name}")
         self.__series[f"{measurement_name}:x"] = self.__init_img(measurement_name, 'x', self.__rows, 0)
         self.__series[f"{measurement_name}:y"] = self.__init_img(measurement_name, 'y', self.__rows, 1)
         self.__series[f"{measurement_name}:z"] = self.__init_img(measurement_name, 'z', self.__rows, 2)
@@ -125,6 +126,7 @@ class Spectrogram(VisibleChart):
         Hides the images at the specified row.
         :param measurement_name: the name.
         '''
+        logger.info(f"Removing charts for {measurement_name}")
         for k, v in self.__series.items():
             if k.startswith(f"{measurement_name}:"):
                 v[0].setVisible(False)

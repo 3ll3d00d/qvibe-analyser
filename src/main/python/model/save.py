@@ -96,8 +96,8 @@ class SaveWavDialog(QDialog, Ui_saveWavDialog):
             output_file = str(file_name[0]).strip()
             rec = next((r for r in self.recorder_store if r.ip_address == self.recorder.currentText()), None)
             if rec is not None:
-                _, data, _, _, _ = rec.snap()
-                if data.shape[0] > 0:
+                _, data, _, _ = rec.snap()
+                if len(data) > 0:
                     columns = [self.__idx(t.text()) for t in self.axes.selectedItems()]
                     samples = data[:, columns] / self.sens
                     wavfile.write(file_name, self.fs, samples)

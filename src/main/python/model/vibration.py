@@ -129,7 +129,7 @@ class Vibration(VisibleChart):
         '''
         d = self.cached_data(measurement_name)
         if d is not None:
-            t = (d.time - np.min(d.time))/500
+            t = (d.time - np.min(d.time)) / self.fs
             self.create_or_update(d.x, t)
             self.create_or_update(d.y, t)
             self.create_or_update(d.z, t)

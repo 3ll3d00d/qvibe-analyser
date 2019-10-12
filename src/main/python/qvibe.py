@@ -83,12 +83,12 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.__start_time = None
         self.__target_config = self.__load_config()
         self.__display_target_config()
-        self.__measurement_store = MeasurementStore(self.measurementLayout, self.measurementBox, self.preferences)
+        self.__measurement_store = MeasurementStore(self.measurementLayout, self.measurementBox, self.bufferSize,
+                                                    self.preferences, self.__target_config)
         self.__measurement_store.signals.data_changed.connect(self.__display_measurement)
         self.__measurement_store.signals.measurement_added.connect(self.__display_measurement)
         self.__measurement_store.signals.visibility_changed.connect(self.__set_visible_measurements)
         self.__recorder_store = RecorderStore(self.__target_config,
-                                              self.bufferSize,
                                               self.recordersLayout,
                                               self.centralwidget,
                                               self.__reactor,
@@ -189,7 +189,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         :param measurement: the measurement.
         '''
         if measurement.visible is True:
-            if measurement.data is not None:
+            if measurement.latest_data is not None:
                 for c in self.__analysers.values():
                     c.accept(measurement.key, measurement.data, measurement.idx)
         else:
@@ -224,7 +224,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
 
     def __capture_snap(self, convert=True):
         ''' Snaps the available data into for saving. '''
-        return {s[0]: np_to_str(s[1]) if convert is True else s[1] for s in self.__recorder_store.snap(connected_only=False) if len(s[1]) > 0}
+        return {k: np_to_str(v) if convert is True else v for k, v in self.__measurement_store.snap_rta().items()}
 
     def __load_signal(self):
         '''
@@ -235,7 +235,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         if name is not None:
             self.statusbar.showMessage(f"Loaded {name}")
             for d in data:
-                self.__measurement_store.add(name, *d)
+                self.__measurement_store.append(name, *d)
 
     @staticmethod
     def __parse_qvibe(file_name):
@@ -311,15 +311,15 @@ class QVibe(QMainWindow, Ui_MainWindow):
         elapsed = round((time.time() * 1000) - self.__start_time)
         new_time = QTime(0, 0, 0, 0).addMSecs(elapsed)
         self.elapsedTime.setTime(new_time)
-        for recorder_name, signal, count, idx, errored in self.__recorder_store.snap():
-            if count > 0:
+        for recorder_name, signal, idx, errored in self.__recorder_store.snap():
+            if len(signal) > 0:
                 if errored is True:
                     msg_box = QMessageBox()
                     msg_box.setText(f"{recorder_name} has overflowed, data will be unreliable \n\n If this occurs repeatedly, try increasing batch size or reducing sample rate via the Sensor Config panel")
                     msg_box.setIcon(QMessageBox.Critical)
                     msg_box.setWindowTitle('Overflow')
                     msg_box.exec()
-                self.__measurement_store.add('rta', recorder_name, signal, idx)
+                self.__measurement_store.append('rta', recorder_name, signal, idx)
 
     def update_target(self):
         ''' updates the current target config from the UI values. '''
@@ -371,6 +371,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         self.preferences.set(RECORDER_TARGET_GYRO_ENABLED, self.__target_config.gyro_enabled)
         self.preferences.set(RECORDER_TARGET_GYRO_SENS, self.__target_config.gyro_sens)
         self.__recorder_store.target_config = self.__target_config
+        self.__measurement_store.target_config = self.__target_config
 
     def set_buffer_size(self, val):
         self.preferences.set(BUFFER_SIZE, val)

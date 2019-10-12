@@ -1,4 +1,5 @@
 import logging
+import math
 
 import numpy as np
 import pyqtgraph as pg
@@ -9,7 +10,7 @@ from common import format_pg_plotitem, block_signals
 from model.charts import VisibleChart, ChartEvent
 from model.frd import ExportDialog
 from model.preferences import RTA_TARGET
-from model.signal import smooth_savgol, Analysis
+from model.signal import smooth_savgol, Analysis, TriAxisSignal
 
 TARGET_PLOT_NAME = 'Target'
 
@@ -24,10 +25,24 @@ class RTAEvent(ChartEvent):
         self.__visible = visible
 
     def process(self):
-        super().process()
-        self.output.set_view(self.__view, recalc=False)
-        if self.input.shape[0] >= self.chart.min_nperseg and self.__visible:
-            self.output.recalc()
+        self.output = [self.__make_sig(i) for i in self.input]
+        self.output = self.output[-1]
+        self.should_emit = True
+
+    def __make_sig(self, chunk):
+        tas = TriAxisSignal(self.preferences,
+                             self.measurement_name,
+                             chunk,
+                             self.chart.fs,
+                             self.chart.resolution_shift,
+                             idx=self.idx,
+                             mode='vibration',
+                             view_mode='spectrogram',
+                             pre_calc=self.__visible)
+        tas.set_view(self.__view, recalc=False)
+        if self.__visible:
+            tas.recalc()
+        return tas
 
 
 class RTA(VisibleChart):
@@ -48,6 +63,7 @@ class RTA(VisibleChart):
         self.__smooth = False
         self.__colour_provider = colour_provider
         self.__move_crosshairs = False
+        self.__chunk_calc = None
         toggle_crosshairs.setToolTip('Press CTRL+T to toggle')
         toggle_crosshairs.toggled[bool].connect(self.__toggle_crosshairs)
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
@@ -139,7 +155,8 @@ class RTA(VisibleChart):
         Remove the measurement from the ref curve.
         :param measurement: the measurement.
         '''
-        self.__known_measurements.remove(measurement.key)
+        if measurement.key in self.__known_measurements:
+            self.__known_measurements.remove(measurement.key)
         self.__remove_from_ref_curve(measurement.key)
 
     def __set_reference_curve(self, curve):
@@ -319,17 +336,17 @@ class RTA(VisibleChart):
 
     def make_event(self, measurement_name, data, idx):
         '''
-        Creates an RTAEvent to pass to the analysis thread.
+        create a min_nperseg sixed window on the data and slide it forward in fresh_sample_count
+        stride a window over the data in fresh_sample_count
         :param measurement_name: the measurement the data came from.
         :param data: the data to analyse.
         :param idx: the index of the data set.
         '''
-        if len(data) <= self.min_nperseg:
-            d = data
-        else:
-            d = data[-self.min_nperseg:]
-        return RTAEvent(self, measurement_name, d, idx, self.preferences, self.budget_millis,
-                        self.__active_view, self.visible)
+        chunks = self.__chunk_calc.recalc(measurement_name, data)
+        if chunks is not None:
+            return RTAEvent(self, measurement_name, chunks, idx, self.preferences, self.budget_millis,
+                            self.__active_view, self.visible)
+        return None
 
     def reset_chart(self):
         '''
@@ -341,6 +358,16 @@ class RTA(VisibleChart):
         self.__ref_curve = None
         self.__plots = {}
         self.__plot_data = {}
+        self.__chunk_calc = ChunkCalculator(self.min_nperseg)
+
+    def on_min_nperseg_change(self):
+        '''
+        Propagates min_nperseg to the chunk calculator.
+        '''
+        if self.__chunk_calc is None:
+            self.__chunk_calc = ChunkCalculator(self.min_nperseg)
+        else:
+            self.__chunk_calc.min_nperseg = self.min_nperseg
 
     def __reset_ref_curve_selector(self):
         with block_signals(self.__ref_curve_selector):
@@ -579,3 +606,38 @@ class RTA(VisibleChart):
                     new_x = capped_x
                     new_y = np.interp(ref_x, data_x, data_y)[1] - ref_y
         return new_x, new_y
+
+
+class ChunkCalculator:
+    def __init__(self, min_nperseg):
+        self.last_idx = {}
+        self.min_nperseg = min_nperseg
+
+    def recalc(self, name, data):
+        last_processed_idx = max(self.last_idx.get(name, 0), data[:, 0][0])
+        latest_idx = data[:, 0][-1]
+        fresh_sample_count = int(latest_idx - last_processed_idx)
+        if fresh_sample_count > 0 and data.shape[0] >= self.min_nperseg:
+            # work out how many samples to include
+            # if we have less fresh data than min_nperseg then take the last nperseg samples
+            # if we have more then take the lesser of all available data
+            if fresh_sample_count <= self.min_nperseg:
+                samples_to_analyse = self.min_nperseg
+            else:
+                target_chunks = math.ceil(fresh_sample_count / self.min_nperseg)
+                samples_to_analyse = target_chunks * self.min_nperseg
+                while samples_to_analyse > data.shape[0]:
+                    target_chunks -= 1
+                    samples_to_analyse = target_chunks * self.min_nperseg
+            if last_processed_idx == 0:
+                new_data = data[0:samples_to_analyse]
+            else:
+                new_data = data[-samples_to_analyse:]
+            new_last_idx = new_data[:, 0][-1]
+            logger.debug(f"Moving window by {new_last_idx - last_processed_idx} [{last_processed_idx} to {new_last_idx}]")
+            self.last_idx[name] = new_last_idx
+            if new_data.shape[0] > self.min_nperseg:
+                return np.vsplit(new_data, new_data.shape[0] / self.min_nperseg)
+            else:
+                return [new_data]
+        return None
