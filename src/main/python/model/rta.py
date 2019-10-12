@@ -26,7 +26,6 @@ class RTAEvent(ChartEvent):
 
     def process(self):
         self.output = [self.__make_sig(i) for i in self.input]
-        self.output = self.output[-1]
         self.should_emit = True
 
     def __make_sig(self, chunk):

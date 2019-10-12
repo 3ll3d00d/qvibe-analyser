@@ -291,12 +291,15 @@ class VisibleChart:
         Accepts the fresh data into the cache for the chart.
         :param data: the data.
         '''
-        if data.measurement_name not in self.__cached:
-            self.__cached[data.measurement_name] = deque(maxlen=self.__cache_size) if self.__cache_size > 0 else deque()
-        cache = self.__cached[data.measurement_name]
-        cache.append(data)
-        self.__cache_purger(cache)
-        return data
+        if isinstance(data, TriAxisSignal):
+            if data.measurement_name not in self.__cached:
+                self.__cached[data.measurement_name] = deque(maxlen=self.__cache_size) if self.__cache_size > 0 else deque()
+            cache = self.__cached[data.measurement_name]
+            cache.append(data)
+            self.__cache_purger(cache)
+            return data
+        else:
+            return [self.accept_data(d) for d in data][-1]
 
     @abc.abstractmethod
     def update_chart(self, measurement_name):

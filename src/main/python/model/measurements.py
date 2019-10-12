@@ -61,7 +61,7 @@ class MeasurementStore:
         Loads snapshots from preferences into the measurement store.
         '''
         self.preferences.enter(SNAPSHOT_GROUP)
-        for id in self.preferences.get_children():
+        for id in self.preferences.get_child_groups():
             self.preferences.enter(id)
             for ip in self.preferences.get_children():
                 import io

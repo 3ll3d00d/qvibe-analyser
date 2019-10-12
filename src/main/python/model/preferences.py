@@ -145,6 +145,9 @@ class Preferences:
     def get_children(self):
         return self.__settings.childKeys()
 
+    def get_child_groups(self):
+        return self.__settings.childGroups()
+
     def exit(self):
         self.__settings.endGroup()
 
