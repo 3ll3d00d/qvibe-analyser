@@ -3,10 +3,12 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
+import qtawesome as qta
+from qtpy import QtWidgets, QtCore
 from qtpy.QtWidgets import QMessageBox
 from qtpy.QtCore import Qt
 
-from common import format_pg_plotitem, block_signals
+from common import format_pg_plotitem, block_signals, FlowLayout
 from model.charts import VisibleChart, ChartEvent
 from model.frd import ExportDialog
 from model.preferences import RTA_TARGET
@@ -45,16 +47,14 @@ class RTAEvent(ChartEvent):
 
 
 class RTA(VisibleChart):
-
-    def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
-                 rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
-                 show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
-                 export_frd_button, ref_curve_selector, show_value_selector, measurement_store_signals,
-                 toggle_crosshairs, colour_provider):
+    def __init__(self, parent_layout, parent_tab, chart, prefs, fs_widget, resolution_widget, fps_widget,
+                 actual_fps_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
+                 ref_curve_selector, show_value_selector, measurement_store_signals, colour_provider):
         measurement_store_signals.measurement_added.connect(self.__add_measurement)
         measurement_store_signals.measurement_deleted.connect(self.__remove_measurement)
+        self.__ui = ControlUi(parent_layout, parent_tab)
         self.__known_measurements = []
-        self.__show_average = show_average.isChecked()
+        self.__show_average = self.__ui.show_average.isChecked()
         self.__ref_curve_selector = ref_curve_selector
         self.__show_value_selector = show_value_selector
         self.__ref_curve = None
@@ -66,28 +66,21 @@ class RTA(VisibleChart):
         self.__colour_provider = colour_provider
         self.__move_crosshairs = False
         self.__chunk_calc = None
-        toggle_crosshairs.setToolTip('Press CTRL+T to toggle')
-        toggle_crosshairs.toggled[bool].connect(self.__toggle_crosshairs)
+        self.__ui.toggle_crosshairs.toggled[bool].connect(self.__toggle_crosshairs)
         super().__init__(prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget,
                          False, coalesce=True, cache_size=-1, cache_purger=self.__purge_cache)
         self.__peak_cache = {}
-        self.__hold_secs = hold_secs.value()
-        self.__show_peak = show_peak.isChecked()
-        self.__show_live = show_live.isChecked()
+        self.__hold_secs = self.__ui.hold_secs.value()
+        self.__show_peak = self.__ui.show_peak.isChecked()
+        self.__show_live = self.__ui.show_live.isChecked()
         self.__target_data = None
-        self.__target_adjustment_db = target_adjust_db.value()
-        self.__show_target = show_target.isChecked()
-        self.__show_target_toggle = show_target
-        self.__target_adjust_db_widget = target_adjust_db
-        target_adjust_db.setToolTip('Adjusts the level of the target curve')
-        target_adjust_db.valueChanged.connect(self.__adjust_target_level)
-        self.__sg_wl = sg_window_length.value()
-        self.__sg_wl_widget = sg_window_length
-        self.__sg_wl_widget.lineEdit().setReadOnly(True)
+        self.__target_adjustment_db = self.__ui.target_adjust_db.value()
+        self.__show_target = self.__ui.show_target.isChecked()
+        self.__show_target_toggle = self.__ui.show_target
+        self.__ui.target_adjust_db.valueChanged.connect(self.__adjust_target_level)
+        self.__sg_wl = self.__ui.sg_window_length.value()
         self.__sg_poly = None
-        self.__on_sg_poly(sg_polyorder.value())
-        sg_window_length.setToolTip('Higher values = smoother curves')
-        sg_polyorder.setToolTip('Lower values = smoother curves')
+        self.__on_sg_poly(self.__ui.sg_poly_order.value())
         self.__frame = 0
         self.__time = -1
         self.__update_rate = None
@@ -98,10 +91,10 @@ class RTA(VisibleChart):
         self.__mag_max = lambda: mag_max_widget.value()
         self.__freq_min = lambda: freq_min_widget.value()
         self.__freq_max = lambda: freq_max_widget.value()
-        self.__on_rta_view_change(rta_view_widget.currentText())
-        rta_view_widget.currentTextChanged.connect(self.__on_rta_view_change)
-        self.__on_rta_smooth_change(smooth_rta_widget.isChecked())
-        smooth_rta_widget.toggled[bool].connect(self.__on_rta_smooth_change)
+        self.__on_rta_view_change(self.__ui.rta_view.currentText())
+        self.__ui.rta_view.currentTextChanged.connect(self.__on_rta_view_change)
+        self.__on_rta_smooth_change(self.__ui.smooth_rta.isChecked())
+        self.__ui.smooth_rta.toggled[bool].connect(self.__on_rta_smooth_change)
         self.__legend = None
         format_pg_plotitem(self.__chart.getPlotItem(),
                            (0, self.fs / 2),
@@ -114,17 +107,17 @@ class RTA(VisibleChart):
         freq_min_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         freq_max_widget.valueChanged['int'].connect(self.__on_freq_limit_change)
         # curve display wiring
-        show_peak.toggled[bool].connect(self.__on_show_peak_change)
-        show_live.toggled[bool].connect(self.__on_show_live_change)
-        show_average.toggled[bool].connect(self.__on_show_average_change)
-        show_target.toggled[bool].connect(self.__on_show_target_change)
-        hold_secs.valueChanged.connect(self.__set_max_cache_age)
+        self.__ui.show_peak.toggled[bool].connect(self.__on_show_peak_change)
+        self.__ui.show_live.toggled[bool].connect(self.__on_show_live_change)
+        self.__ui.show_average.toggled[bool].connect(self.__on_show_average_change)
+        self.__ui.show_target.toggled[bool].connect(self.__on_show_target_change)
+        self.__ui.hold_secs.valueChanged.connect(self.__set_max_cache_age)
         # S-G filter params
-        sg_window_length.valueChanged['int'].connect(self.__on_sg_window_length)
-        sg_polyorder.valueChanged['int'].connect(self.__on_sg_poly)
+        self.__ui.sg_window_length.valueChanged['int'].connect(self.__on_sg_window_length)
+        self.__ui.sg_poly_order.valueChanged['int'].connect(self.__on_sg_poly)
         self.reload_target()
         # export
-        export_frd_button.clicked.connect(self.__export_frd)
+        self.__ui.export_frd.clicked.connect(self.__export_frd)
         # ref curves
         self.__ref_curve_selector.currentTextChanged.connect(self.__set_reference_curve)
         # marker curves
@@ -220,7 +213,7 @@ class RTA(VisibleChart):
         :param wl: the length.
         '''
         if wl % 2 == 0:
-            self.__sg_wl_widget.setValue(wl+1)
+            self.__ui.sg_window_length.setValue(wl+1)
         else:
             self.__sg_wl = wl
         if self.__smooth is True:
@@ -235,7 +228,7 @@ class RTA(VisibleChart):
         wl_min = poly + 1
         if wl_min % 2 == 0:
             wl_min += 1
-        self.__sg_wl_widget.setMinimum(wl_min)
+        self.__ui.sg_window_length.setMinimum(wl_min)
         if self.__smooth is True:
             self.update_all_plots()
 
@@ -333,8 +326,8 @@ class RTA(VisibleChart):
         '''
         if self.preferences.has(RTA_TARGET) is True:
             self.__show_target_toggle.setEnabled(True)
-            self.__target_adjust_db_widget.setEnabled(True)
-            self.__target_adjust_db_widget.setValue(0)
+            self.__ui.target_adjust_db.setEnabled(True)
+            self.__ui.target_adjust_db.setValue(0)
             import io
             arr = np.loadtxt(io.StringIO(self.preferences.get(RTA_TARGET)), dtype=np.float64, ndmin=2)
             f = arr[0]
@@ -348,8 +341,8 @@ class RTA(VisibleChart):
         else:
             self.__show_target_toggle.setChecked(False)
             self.__show_target_toggle.setEnabled(False)
-            self.__target_adjust_db_widget.setValue(0)
-            self.__target_adjust_db_widget.setEnabled(False)
+            self.__ui.target_adjust_db.setValue(0)
+            self.__ui.target_adjust_db.setEnabled(False)
             self.__target_data = None
         self.__render_target()
 
@@ -723,3 +716,105 @@ class AccelerationLabel:
         else:
             suffix = ''
         return self.__format.format(value=value, accel=accel, suffix=suffix)
+
+
+class ControlUi:
+    def __init__(self, parent_layout, rtaTab):
+        self.parent_layout = parent_layout
+        self.rta_tab = rtaTab
+        self.rta_controls_layout = FlowLayout()
+        self.rta_controls_layout.setObjectName("rtaControlsLayout")
+        self.rta_view_label = QtWidgets.QLabel(self.rta_tab)
+        self.rta_view_label.setObjectName("rtaViewLabel")
+        self.rta_controls_layout.addWidget(self.rta_view_label)
+        self.rta_view = QtWidgets.QComboBox(self.rta_tab)
+        self.rta_view.setObjectName("rtaView")
+        self.rta_view.addItem("")
+        self.rta_view.addItem("")
+        self.rta_view.addItem("")
+        self.rta_controls_layout.addWidget(self.rta_view)
+        self.hold_time_label = QtWidgets.QLabel(self.rta_tab)
+        self.hold_time_label.setObjectName("holdTimeLabel")
+        self.rta_controls_layout.addWidget(self.hold_time_label)
+        self.hold_secs = QtWidgets.QDoubleSpinBox(self.rta_tab)
+        self.hold_secs.setDecimals(1)
+        self.hold_secs.setMinimum(0.5)
+        self.hold_secs.setMaximum(30.0)
+        self.hold_secs.setSingleStep(0.1)
+        self.hold_secs.setProperty("value", 2.0)
+        self.hold_secs.setObjectName("holdSecs")
+        self.rta_controls_layout.addWidget(self.hold_secs)
+        self.show_live = QtWidgets.QPushButton(self.rta_tab)
+        self.show_live.setCheckable(True)
+        self.show_live.setChecked(True)
+        self.show_live.setObjectName("showLive")
+        self.rta_controls_layout.addWidget(self.show_live)
+        self.show_peak = QtWidgets.QPushButton(self.rta_tab)
+        self.show_peak.setCheckable(True)
+        self.show_peak.setObjectName("showPeak")
+        self.rta_controls_layout.addWidget(self.show_peak)
+        self.show_average = QtWidgets.QPushButton(self.rta_tab)
+        self.show_average.setCheckable(True)
+        self.show_average.setObjectName("showAverage")
+        self.rta_controls_layout.addWidget(self.show_average)
+        self.show_target = QtWidgets.QPushButton(self.rta_tab)
+        self.show_target.setCheckable(True)
+        self.show_target.setObjectName("showTarget")
+        self.rta_controls_layout.addWidget(self.show_target)
+        self.target_adjust_db = QtWidgets.QDoubleSpinBox(self.rta_tab)
+        self.target_adjust_db.setDecimals(1)
+        self.target_adjust_db.setMinimum(-150.0)
+        self.target_adjust_db.setMaximum(150.0)
+        self.target_adjust_db.setSingleStep(0.1)
+        self.target_adjust_db.setObjectName("targetAdjust")
+        self.rta_controls_layout.addWidget(self.target_adjust_db)
+        self.smooth_rta = QtWidgets.QPushButton(self.rta_tab)
+        self.smooth_rta.setCheckable(True)
+        self.smooth_rta.setObjectName("smoothRta")
+        self.rta_controls_layout.addWidget(self.smooth_rta)
+        self.sg_window_length = QtWidgets.QSpinBox(self.rta_tab)
+        self.sg_window_length.setMinimum(1)
+        self.sg_window_length.setMaximum(201)
+        self.sg_window_length.setSingleStep(2)
+        self.sg_window_length.setProperty("value", 101)
+        self.sg_window_length.setObjectName("sgWindowLength")
+        self.sg_window_length.lineEdit().setReadOnly(True)
+        self.sg_window_length.setToolTip('Higher values = smoother curves')
+        self.rta_controls_layout.addWidget(self.sg_window_length)
+        self.sg_poly_order = QtWidgets.QSpinBox(self.rta_tab)
+        self.sg_poly_order.setMinimum(1)
+        self.sg_poly_order.setMaximum(11)
+        self.sg_poly_order.setProperty("value", 7)
+        self.sg_poly_order.setObjectName("sgPolyOrder")
+        self.sg_poly_order.setToolTip('Lower values = smoother curves')
+        self.rta_controls_layout.addWidget(self.sg_poly_order)
+        spacerItem5 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.rta_controls_layout.addItem(spacerItem5)
+        self.toggle_crosshairs = QtWidgets.QPushButton(self.rta_tab)
+        self.toggle_crosshairs.setCheckable(True)
+        self.toggle_crosshairs.setObjectName("toggleCrosshairs")
+        self.rta_controls_layout.addWidget(self.toggle_crosshairs)
+        self.export_frd = QtWidgets.QToolButton(self.rta_tab)
+        self.export_frd.setObjectName("exportFRD")
+        self.rta_controls_layout.addWidget(self.export_frd)
+        self.parent_layout.addLayout(self.rta_controls_layout, 0, 0, 1, 1)
+        _translate = QtCore.QCoreApplication.translate
+        self.rta_view_label.setText(_translate("MainWindow", "View"))
+        self.rta_view.setItemText(0, _translate("MainWindow", "avg"))
+        self.rta_view.setItemText(1, _translate("MainWindow", "peak"))
+        self.rta_view.setItemText(2, _translate("MainWindow", "psd"))
+        self.hold_time_label.setText(_translate("MainWindow", "Hold Time:"))
+        self.hold_secs.setToolTip(_translate("MainWindow", "Seconds of data to include in peak calculation"))
+        self.hold_secs.setSuffix(_translate("MainWindow", " s"))
+        self.show_live.setText(_translate("MainWindow", "Live"))
+        self.show_peak.setText(_translate("MainWindow", "Peak"))
+        self.show_average.setText(_translate("MainWindow", "Average"))
+        self.show_target.setText(_translate("MainWindow", "Target"))
+        self.target_adjust_db.setSuffix(_translate("MainWindow", " dB"))
+        self.target_adjust_db.setToolTip('Adjusts the level of the target curve')
+        self.smooth_rta.setText(_translate("MainWindow", "Smooth"))
+        self.toggle_crosshairs.setText(_translate("MainWindow", "Move Crosshairs"))
+        self.toggle_crosshairs.setShortcut(_translate("MainWindow", "Ctrl+T"))
+        self.toggle_crosshairs.setToolTip('Press CTRL+T to toggle')
+        self.export_frd.setText(_translate("MainWindow", "..."))
+        self.export_frd.setIcon(qta.icon('fa5s.file-export'))

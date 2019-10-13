@@ -6,9 +6,9 @@ from contextlib import contextmanager
 import numpy as np
 import pyqtgraph as pg
 from qtpy import QtCore
-from qtpy.QtCore import QRunnable
+from qtpy.QtCore import QRunnable, QRect, QSize, QPoint, Qt
 from qtpy.QtGui import QCursor, QFont
-from qtpy.QtWidgets import QApplication, QFileDialog
+from qtpy.QtWidgets import QApplication, QFileDialog, QLayout, QSizePolicy
 
 logger = logging.getLogger('qvibe.common')
 
@@ -611,3 +611,92 @@ def parse_file(filter, title, parsers):
                 if file_name.endswith(k):
                     return v(file_name)
     return None, None
+
+
+class FlowLayout(QLayout):
+
+    def __init__(self, parent=None, margin=0, spacing=-1):
+        super(FlowLayout, self).__init__(parent)
+
+        if parent is not None:
+            self.setContentsMargins(margin, margin, margin, margin)
+
+        self.setSpacing(spacing)
+
+        self.item_list = []
+
+    def __del__(self):
+        item = self.takeAt(0)
+        while item:
+            item = self.takeAt(0)
+
+    def addItem(self, item):
+        self.item_list.append(item)
+
+    def count(self):
+        return len(self.item_list)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self.item_list):
+            return self.item_list[index]
+
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self.item_list):
+            return self.item_list.pop(index)
+
+        return None
+
+    def expandingDirections(self):
+        return Qt.Orientations(Qt.Orientation(0))
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        height = self.doLayout(QRect(0, 0, width, 0), True)
+        return height
+
+    def setGeometry(self, rect):
+        super(FlowLayout, self).setGeometry(rect)
+        self.doLayout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+
+        for item in self.item_list:
+            size = size.expandedTo(item.minimumSize())
+
+        margin, _, _, _ = self.getContentsMargins()
+
+        size += QSize(2 * margin, 2 * margin)
+        return size
+
+    def doLayout(self, rect, testOnly):
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+
+        for item in self.item_list:
+            wid = item.widget()
+            if wid is not None:
+                space_x = self.spacing() + wid.style().layoutSpacing(QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal)
+                space_y = self.spacing() + wid.style().layoutSpacing(QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Vertical)
+                next_x = x + item.sizeHint().width() + space_x
+                if next_x - space_x > rect.right() and line_height > 0:
+                    x = rect.x()
+                    y = y + line_height + space_y
+                    next_x = x + item.sizeHint().width() + space_x
+                    line_height = 0
+
+                if not testOnly:
+                    item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+
+                x = next_x
+                line_height = max(line_height, item.sizeHint().height())
+
+        return y + line_height - rect.y()
