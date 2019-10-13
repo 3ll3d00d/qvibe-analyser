@@ -133,7 +133,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
             1: RTA(self.rtaChart, self.preferences, self.targetSampleRate, self.resolutionHz, self.fps, self.actualFPS,
                    self.showAverage, self.rtaView, self.smoothRta, self.magMin, self.magMax, self.freqMin, self.freqMax,
                    self.showLive, self.showPeak, self.showTarget, self.targetAdjust, self.holdSecs, self.sgWindowLength,
-                   self.sgPolyOrder, self.exportFRD, self.refCurve, self.__measurement_store.signals,
+                   self.sgPolyOrder, self.exportFRD, self.refCurve, self.showValueFor, self.__measurement_store.signals,
                    self.toggleCrosshairs, colour_provider),
             2: Spectrogram(self.spectrogramView, self.preferences, self.targetSampleRate, self.fps, self.actualFPS,
                            self.resolutionHz, self.bufferSize, self.magMin, self.magMax, self.freqMin, self.freqMax,

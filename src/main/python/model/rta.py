@@ -10,7 +10,7 @@ from common import format_pg_plotitem, block_signals
 from model.charts import VisibleChart, ChartEvent
 from model.frd import ExportDialog
 from model.preferences import RTA_TARGET
-from model.signal import smooth_savgol, Analysis, TriAxisSignal
+from model.signal import smooth_savgol, Analysis, TriAxisSignal, REF_ACCELERATION_IN_G
 
 TARGET_PLOT_NAME = 'Target'
 
@@ -49,14 +49,17 @@ class RTA(VisibleChart):
     def __init__(self, chart, prefs, fs_widget, resolution_widget, fps_widget, actual_fps_widget, show_average,
                  rta_view_widget, smooth_rta_widget, mag_min_widget, mag_max_widget, freq_min_widget, freq_max_widget,
                  show_live, show_peak, show_target, target_adjust_db, hold_secs, sg_window_length, sg_polyorder,
-                 export_frd_button, ref_curve_selector, measurement_store_signals, toggle_crosshairs, colour_provider):
+                 export_frd_button, ref_curve_selector, show_value_selector, measurement_store_signals,
+                 toggle_crosshairs, colour_provider):
         measurement_store_signals.measurement_added.connect(self.__add_measurement)
         measurement_store_signals.measurement_deleted.connect(self.__remove_measurement)
         self.__known_measurements = []
         self.__show_average = show_average.isChecked()
         self.__ref_curve_selector = ref_curve_selector
+        self.__show_value_selector = show_value_selector
         self.__ref_curve = None
-        self.__reset_ref_curve_selector()
+        self.__reset_selector(self.__ref_curve_selector)
+        self.__reset_selector(self.__show_value_selector)
         self.__plots = {}
         self.__plot_data = {}
         self.__smooth = False
@@ -124,18 +127,21 @@ class RTA(VisibleChart):
         export_frd_button.clicked.connect(self.__export_frd)
         # ref curves
         self.__ref_curve_selector.currentTextChanged.connect(self.__set_reference_curve)
+        # marker curves
+        self.__show_value_selector.currentTextChanged.connect(self.__set_show_value_curve)
         # crosshairs
-        v_line = pg.InfiniteLine(angle=90, movable=False, label='[{value:0.1f}]', labelOpts={'position': 0.95})
-        h_line = pg.InfiniteLine(angle=0, movable=False, label='[{value:0.1f}]', labelOpts={'position': 0.95})
-        self.__chart.getPlotItem().addItem(v_line, ignoreBounds=True)
-        self.__chart.getPlotItem().addItem(h_line, ignoreBounds=True)
+        self.__v_line_label = CurveAwareLabel()
+        self.__v_line = pg.InfiniteLine(angle=90, movable=False, label=self.__v_line_label, labelOpts={'position': 0.95})
+        self.__h_line = pg.InfiniteLine(angle=0, movable=False, label=AccelerationLabel(), labelOpts={'position': 0.95})
+        self.__chart.getPlotItem().addItem(self.__v_line, ignoreBounds=True)
+        self.__chart.getPlotItem().addItem(self.__h_line, ignoreBounds=True)
 
         def mouse_moved(evt):
             pos = evt[0]
             if self.__chart.getPlotItem().sceneBoundingRect().contains(pos) and self.__move_crosshairs is True:
                 mouse_point = self.__chart.getPlotItem().vb.mapSceneToView(pos)
-                v_line.setPos(mouse_point.x())
-                h_line.setPos(mouse_point.y())
+                self.__v_line.setPos(mouse_point.x())
+                self.__h_line.setPos(mouse_point.y())
 
         self.__proxy = pg.SignalProxy(self.__chart.scene().sigMouseMoved, delay=0.125, rateLimit=20, slot=mouse_moved)
 
@@ -156,7 +162,8 @@ class RTA(VisibleChart):
         '''
         if measurement.key in self.__known_measurements:
             self.__known_measurements.remove(measurement.key)
-        self.__remove_from_ref_curve(measurement.key)
+        self.__remove_from_selector(self.__ref_curve_selector, measurement.key)
+        self.__remove_from_selector(self.__show_value_selector, measurement.key)
 
     def __set_reference_curve(self, curve):
         '''
@@ -179,6 +186,19 @@ class RTA(VisibleChart):
 
             self.__render_target()
             self.update_all_plots()
+
+    def __set_show_value_curve(self, curve):
+        '''
+        Updates the curve associated with the vline.
+        :param curve: the curve.
+        '''
+        curve = curve if curve != '' else None
+        if curve in self.__plots:
+            curve = self.__plots[curve]
+        else:
+            curve = None
+        self.__v_line_label.curve = curve
+        self.__v_line.label.valueChanged()
 
     def __export_frd(self):
         '''
@@ -353,8 +373,10 @@ class RTA(VisibleChart):
         '''
         for c in self.__plots.values():
             self.__chart.removeItem(c)
-        self.__reset_ref_curve_selector()
+        self.__reset_selector(self.__ref_curve_selector)
+        self.__reset_selector(self.__show_value_selector)
         self.__ref_curve = None
+        self.__v_line_label.curve = None
         self.__plots = {}
         self.__plot_data = {}
         self.__chunk_calc = ChunkCalculator(self.min_nperseg)
@@ -368,10 +390,14 @@ class RTA(VisibleChart):
         else:
             self.__chunk_calc.min_nperseg = self.min_nperseg
 
-    def __reset_ref_curve_selector(self):
-        with block_signals(self.__ref_curve_selector):
-            self.__ref_curve_selector.clear()
-            self.__ref_curve_selector.addItem('')
+    @staticmethod
+    def __reset_selector(selector):
+        '''
+        Clears out the combo.
+        '''
+        with block_signals(selector):
+            selector.clear()
+            selector.addItem('')
 
     def update_chart(self, measurement_name):
         '''
@@ -495,18 +521,21 @@ class RTA(VisibleChart):
         del self.__plots[name]
         del self.__plot_data[name]
         self.__legend.removeItem(name)
-        self.__remove_from_ref_curve(name)
+        self.__remove_from_selector(self.__ref_curve_selector, name)
+        self.__remove_from_selector(self.__show_value_selector, name)
 
-    def __remove_from_ref_curve(self, name):
+    @staticmethod
+    def __remove_from_selector(selector, name):
         '''
-        Removes the named item from the ref curve selector.
+        Removes the named item from the selector.
+        :param selector: the selector.
         :param name: the name.
         '''
-        idx = self.__ref_curve_selector.findText(name)
+        idx = selector.findText(name)
         if idx > -1:
-            if self.__ref_curve_selector.currentIndex() == idx:
-                self.__ref_curve_selector.setCurrentIndex(0)
-            self.__ref_curve_selector.removeItem(idx)
+            if selector.currentIndex() == idx:
+                selector.setCurrentIndex(0)
+            selector.removeItem(idx)
 
     def __show_or_remove_analysis(self, plot_name, measurement_name, axis, x_data, y_data, pen_args):
         '''
@@ -547,17 +576,24 @@ class RTA(VisibleChart):
                 x_data, y = self.__normalise(ref_plot_data[0], ref_plot_data[1], x_data, y)
         if plot_name in self.__plots:
             self.__plots[plot_name].setData(x_data, y)
+            self.__v_line.label.valueChanged()
         else:
             if self.__legend is None:
                 self.__legend = self.__chart.addLegend(offset=(-15, -15))
             pen = pg.mkPen(color=self.__colour_provider.get_colour(plot_name), width=2, **pen_args)
             self.__plots[plot_name] = self.__chart.plot(x_data, y, pen=pen, name=plot_name)
-            if self.__ref_curve_selector.findText(plot_name) == -1:
+            self.__ensure_curve_in_selector(self.__ref_curve_selector, plot_name)
+            self.__ensure_curve_in_selector(self.__show_value_selector, plot_name, include_measurement=False)
+
+    def __ensure_curve_in_selector(self, selector, plot_name, include_measurement=True):
+        ''' Ensures the name is in the combo '''
+        if selector.findText(plot_name) == -1:
+            if include_measurement is True:
                 m_name = next((m for m in self.__known_measurements if plot_name.startswith(f"{m}:")), None)
                 if m_name is not None:
-                    if self.__ref_curve_selector.findText(m_name) == -1:
-                        self.__ref_curve_selector.addItem(m_name)
-                self.__ref_curve_selector.addItem(plot_name)
+                    if selector.findText(m_name) == -1:
+                        selector.addItem(m_name)
+            selector.addItem(plot_name)
 
     @staticmethod
     def __normalise(ref_x, ref_y, data_x, data_y):
@@ -640,3 +676,50 @@ class ChunkCalculator:
             else:
                 return [new_data]
         return None
+
+
+class CurveAwareLabel:
+    def __init__(self):
+        self.curve = None
+        self.__no_curve_format = '[{value:0.1f} Hz]'
+        self.__curve_format = '[{value:0.1f} Hz / {mag:0.1f} dB{accel}]'
+        self.__accel_format = '{sep}{accel:0.3f}{suffix}{unit}'
+
+    def format(self, value):
+        if self.curve is None:
+            return self.__no_curve_format.format(value=value)
+        else:
+            mag = self.__get_y_pos(value)
+            if mag == -1:
+                accel = ''
+            else:
+                sep = ' / '
+                unit = 'G'
+                suffix = ''
+                accel = 10.0 ** (mag/20) * REF_ACCELERATION_IN_G
+                if accel <= 0.1:
+                    accel *= 1000.0
+                    suffix = 'm'
+                accel = self.__accel_format.format(suffix=suffix, unit=unit, sep=sep, accel=accel)
+            return self.__curve_format.format(value=value, mag=mag, accel=accel)
+
+    def __get_y_pos(self, hz):
+        try:
+            x, y = self.curve.getData()
+            return y[np.argmax(x >= hz)]
+        except:
+            return -1.0
+
+
+class AccelerationLabel:
+    def __init__(self):
+        self.__format = '[{value:0.1f} dB / {accel:0.3f} {suffix}G]'
+
+    def format(self, value):
+        accel = 10.0 ** (value/20) * REF_ACCELERATION_IN_G
+        if accel <= 0.1:
+            accel *= 1000.0
+            suffix = 'm'
+        else:
+            suffix = ''
+        return self.__format.format(value=value, accel=accel, suffix=suffix)
