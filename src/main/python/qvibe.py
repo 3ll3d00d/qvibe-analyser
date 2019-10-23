@@ -188,6 +188,7 @@ class QVibe(QMainWindow, Ui_MainWindow):
         if measurement.visible is True:
             if measurement.latest_data is not None:
                 for c in self.__analysers.values():
+                    # TODO must unwrap
                     c.accept(measurement.key, measurement.data, measurement.idx)
         else:
             logger.info(f"Hiding {measurement}")

@@ -372,16 +372,34 @@ class RTA(VisibleChart):
         self.__v_line_label.curve = None
         self.__plots = {}
         self.__plot_data = {}
-        self.__chunk_calc = ChunkCalculator(self.min_nperseg)
+        self.__chunk_calc = ChunkCalculator(self.min_nperseg, self.__get_stride())
 
     def on_min_nperseg_change(self):
         '''
         Propagates min_nperseg to the chunk calculator.
         '''
         if self.__chunk_calc is None:
-            self.__chunk_calc = ChunkCalculator(self.min_nperseg)
+            if self.min_nperseg is not None and self.fs is not None and self.fps is not None:
+                self.__chunk_calc = ChunkCalculator(self.min_nperseg, self.__get_stride())
         else:
             self.__chunk_calc.min_nperseg = self.min_nperseg
+
+    def __get_stride(self):
+        return int(self.fs / self.fps)
+
+    def on_fs_change(self):
+        if self.__chunk_calc is None:
+            if self.min_nperseg is not None and self.fs is not None and self.fps is not None:
+                self.__chunk_calc = ChunkCalculator(self.min_nperseg, self.__get_stride())
+        else:
+            self.__chunk_calc.stride = self.__get_stride()
+
+    def when_fps_changed(self):
+        if self.__chunk_calc is None:
+            if self.min_nperseg is not None and self.fs is not None and self.fps is not None:
+                self.__chunk_calc = ChunkCalculator(self.min_nperseg, self.__get_stride())
+        else:
+            self.__chunk_calc.stride = self.__get_stride()
 
     @staticmethod
     def __reset_selector(selector):
@@ -637,37 +655,37 @@ class RTA(VisibleChart):
 
 
 class ChunkCalculator:
-    def __init__(self, min_nperseg):
+    def __init__(self, min_nperseg, stride):
+        '''
+        Creates a new calculator which produces chunks and min_nperseg size sliding forward in stride steps
+        '''
         self.last_idx = {}
         self.min_nperseg = min_nperseg
+        self.stride = stride
 
     def recalc(self, name, data):
-        last_processed_idx = max(self.last_idx.get(name, 0), data[:, 0][0])
-        latest_idx = data[:, 0][-1]
-        fresh_sample_count = int(latest_idx - last_processed_idx)
-        if fresh_sample_count > 0 and data.shape[0] >= self.min_nperseg:
-            # work out how many samples to include
-            # if we have less fresh data than min_nperseg then take the last nperseg samples
-            # if we have more then take the lesser of all available data
-            if fresh_sample_count <= self.min_nperseg:
-                samples_to_analyse = self.min_nperseg
-            else:
-                target_chunks = math.ceil(fresh_sample_count / self.min_nperseg)
-                samples_to_analyse = target_chunks * self.min_nperseg
-                while samples_to_analyse > data.shape[0]:
-                    target_chunks -= 1
-                    samples_to_analyse = target_chunks * self.min_nperseg
-            if last_processed_idx == 0:
-                new_data = data[0:samples_to_analyse]
-            else:
-                new_data = data[-samples_to_analyse:]
-            new_last_idx = new_data[:, 0][-1]
-            logger.debug(f"Moving window by {new_last_idx - last_processed_idx} [{last_processed_idx} to {new_last_idx}]")
-            self.last_idx[name] = new_last_idx
-            if new_data.shape[0] > self.min_nperseg:
-                return np.vsplit(new_data, new_data.shape[0] / self.min_nperseg)
-            else:
-                return [new_data]
+        last_processed_idx = int(max(self.last_idx.get(name, 0), data[:, 0][0]))
+        last_sample_idx = np.argmax(data[:, 0] == last_processed_idx) if last_processed_idx > 0 else 0
+        fresh_samples = data.shape[0] - last_sample_idx
+        chunks = []
+        if last_processed_idx == 0:
+            if fresh_samples >= self.min_nperseg:
+                chunks.append(data[0:self.min_nperseg])
+                last_sample_idx = self.min_nperseg - 1
+                fresh_samples -= self.min_nperseg
+        if fresh_samples > self.stride:
+            while True:
+                next_idx = last_sample_idx + self.stride + 1
+                if next_idx > data.shape[0]:
+                    break
+                start = max(0, next_idx - self.min_nperseg)
+                chunk = data[start:next_idx]
+                if chunk.shape[0] == self.min_nperseg:
+                    chunks.append(chunk)
+                last_sample_idx = next_idx - 1
+        if chunks:
+            self.last_idx[name] = chunks[-1][:, 0][-1]
+            return chunks
         return None
 
 
