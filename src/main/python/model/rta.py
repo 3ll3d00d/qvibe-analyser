@@ -11,7 +11,7 @@ from qtpy.QtCore import Qt
 from common import format_pg_plotitem, block_signals, FlowLayout
 from model.charts import VisibleChart, ChartEvent
 from model.frd import ExportDialog
-from model.preferences import RTA_TARGET
+from model.preferences import RTA_TARGET, RTA_HOLD_SECONDS, RTA_SMOOTH_WINDOW, RTA_SMOOTH_POLY
 from model.signal import smooth_savgol, Analysis, TriAxisSignal, REF_ACCELERATION_IN_G
 
 TARGET_PLOT_NAME = 'Target'
@@ -52,7 +52,7 @@ class RTA(VisibleChart):
                  ref_curve_selector, show_value_selector, measurement_store_signals, colour_provider):
         measurement_store_signals.measurement_added.connect(self.__add_measurement)
         measurement_store_signals.measurement_deleted.connect(self.__remove_measurement)
-        self.__ui = ControlUi(parent_layout, parent_tab)
+        self.__ui = ControlUi(parent_layout, parent_tab, prefs)
         self.__known_measurements = []
         self.__show_average = self.__ui.show_average.isChecked()
         self.__ref_curve_selector = ref_curve_selector
@@ -737,9 +737,10 @@ class AccelerationLabel:
 
 
 class ControlUi:
-    def __init__(self, parent_layout, rtaTab):
+    def __init__(self, parent_layout, rtaTab, prefs):
         self.parent_layout = parent_layout
         self.rta_tab = rtaTab
+        self.preferences = prefs
         self.rta_controls_layout = FlowLayout()
         self.rta_controls_layout.setObjectName("rtaControlsLayout")
         self.rta_view_label = QtWidgets.QLabel(self.rta_tab)
@@ -759,7 +760,7 @@ class ControlUi:
         self.hold_secs.setMinimum(0.5)
         self.hold_secs.setMaximum(30.0)
         self.hold_secs.setSingleStep(0.1)
-        self.hold_secs.setProperty("value", 2.0)
+        self.hold_secs.setProperty("value", self.preferences.get(RTA_HOLD_SECONDS))
         self.hold_secs.setObjectName("holdSecs")
         self.rta_controls_layout.addWidget(self.hold_secs)
         self.show_live = QtWidgets.QPushButton(self.rta_tab)
@@ -794,7 +795,7 @@ class ControlUi:
         self.sg_window_length.setMinimum(1)
         self.sg_window_length.setMaximum(201)
         self.sg_window_length.setSingleStep(2)
-        self.sg_window_length.setProperty("value", 101)
+        self.sg_window_length.setProperty("value", self.preferences.get(RTA_SMOOTH_WINDOW))
         self.sg_window_length.setObjectName("sgWindowLength")
         self.sg_window_length.lineEdit().setReadOnly(True)
         self.sg_window_length.setToolTip('Higher values = smoother curves')
@@ -802,7 +803,7 @@ class ControlUi:
         self.sg_poly_order = QtWidgets.QSpinBox(self.rta_tab)
         self.sg_poly_order.setMinimum(1)
         self.sg_poly_order.setMaximum(11)
-        self.sg_poly_order.setProperty("value", 7)
+        self.sg_poly_order.setProperty("value", self.preferences.get(RTA_SMOOTH_POLY))
         self.sg_poly_order.setObjectName("sgPolyOrder")
         self.sg_poly_order.setToolTip('Lower values = smoother curves')
         self.rta_controls_layout.addWidget(self.sg_poly_order)
@@ -812,6 +813,10 @@ class ControlUi:
         self.toggle_crosshairs.setCheckable(True)
         self.toggle_crosshairs.setObjectName("toggleCrosshairs")
         self.rta_controls_layout.addWidget(self.toggle_crosshairs)
+        self.save_config = QtWidgets.QToolButton(self.rta_tab)
+        self.save_config.setObjectName("saveConfig")
+        self.save_config.clicked.connect(self.__save_config)
+        self.rta_controls_layout.addWidget(self.save_config)
         self.export_frd = QtWidgets.QToolButton(self.rta_tab)
         self.export_frd.setObjectName("exportFRD")
         self.rta_controls_layout.addWidget(self.export_frd)
@@ -834,5 +839,13 @@ class ControlUi:
         self.toggle_crosshairs.setText(_translate("MainWindow", "Move Crosshairs"))
         self.toggle_crosshairs.setShortcut(_translate("MainWindow", "Ctrl+T"))
         self.toggle_crosshairs.setToolTip('Press CTRL+T to toggle')
+        self.save_config.setIcon(qta.icon('fa5s.save'))
+        self.save_config.setShortcut(_translate("MainWindow", "Ctrl+Shift+S"))
+        self.save_config.setToolTip('Press CTRL+SHIFT+S to save the current config')
         self.export_frd.setText(_translate("MainWindow", "..."))
         self.export_frd.setIcon(qta.icon('fa5s.file-export'))
+
+    def __save_config(self):
+        self.preferences.set(RTA_HOLD_SECONDS, self.hold_secs.value())
+        self.preferences.set(RTA_SMOOTH_WINDOW, self.sg_window_length.value())
+        self.preferences.set(RTA_SMOOTH_POLY, self.sg_poly_order.value())

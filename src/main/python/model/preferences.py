@@ -56,6 +56,10 @@ WAV_DOWNLOAD_DIR = 'wav/download_dir'
 SNAPSHOT_GROUP = 'snapshot'
 
 RTA_TARGET = 'rta/target'
+RTA_HOLD_SECONDS = 'rta/hold_secs'
+RTA_SMOOTH_WINDOW = 'rta/smooth_window'
+RTA_SMOOTH_POLY = 'rta/smooth_poly'
+
 
 DEFAULT_PREFS = {
     ANALYSIS_RESOLUTION: 1.0,
@@ -76,6 +80,9 @@ DEFAULT_PREFS = {
     RECORDER_TARGET_ACCEL_SENS: 4,
     RECORDER_TARGET_GYRO_ENABLED: False,
     RECORDER_TARGET_GYRO_SENS: 500,
+    RTA_HOLD_SECONDS: 10.0,
+    RTA_SMOOTH_WINDOW: 31,
+    RTA_SMOOTH_POLY: 7,
     SUM_X_SCALE: 2.2,
     SUM_Y_SCALE: 2.4,
     SUM_Z_SCALE: 1.0,
@@ -89,6 +96,10 @@ TYPES = {
     ANALYSIS_RESOLUTION: float,
     ANALYSIS_TARGET_FS: int,
     BUFFER_SIZE: int,
+    CHART_MAG_MIN: int,
+    CHART_MAG_MAX: int,
+    CHART_FREQ_MIN: int,
+    CHART_FREQ_MAX: int,
     DISPLAY_SMOOTH_GRAPHS: bool,
     RECORDER_TARGET_FS: int,
     RECORDER_TARGET_SAMPLES_PER_BATCH: int,
@@ -96,10 +107,9 @@ TYPES = {
     RECORDER_TARGET_ACCEL_SENS: int,
     RECORDER_TARGET_GYRO_ENABLED: bool,
     RECORDER_TARGET_GYRO_SENS: int,
-    CHART_MAG_MIN: int,
-    CHART_MAG_MAX: int,
-    CHART_FREQ_MIN: int,
-    CHART_FREQ_MAX: int,
+    RTA_HOLD_SECONDS: float,
+    RTA_SMOOTH_POLY: int,
+    RTA_SMOOTH_WINDOW: int,
     SUM_X_SCALE: float,
     SUM_Y_SCALE: float,
     SUM_Z_SCALE: float,
