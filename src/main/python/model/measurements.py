@@ -56,6 +56,9 @@ class MeasurementStore:
     def __iter__(self):
         return iter(self.__measurements)
 
+    def __len__(self):
+        return len(self.__measurements)
+
     def load_snapshots(self):
         '''
         Loads snapshots from preferences into the measurement store.

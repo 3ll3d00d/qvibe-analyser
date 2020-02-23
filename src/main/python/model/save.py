@@ -1,14 +1,22 @@
+import logging
+
+import time
+
 import math
 import os
 
 from pyqtgraph.exporters import ImageExporter
 from qtpy.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from scipy.io import wavfile
+from resampy import resample
 
-from common import block_signals
+from common import block_signals, wait_cursor
 from model.preferences import WAV_DOWNLOAD_DIR
 from ui.savechart import Ui_saveChartDialog
 from ui.savewav import Ui_saveWavDialog
+from model.log import to_millis
+
+logger = logging.getLogger('qvibe.save')
 
 
 class SaveChartDialog(QDialog, Ui_saveChartDialog):
@@ -66,15 +74,15 @@ class SaveWavDialog(QDialog, Ui_saveWavDialog):
     Save WAV dialog
     '''
 
-    def __init__(self, parent, preferences, recorder_store, fs, sens, statusbar=None):
+    def __init__(self, parent, preferences, measurement_store, fs, sens, statusbar=None):
         super(SaveWavDialog, self).__init__(parent)
         self.setupUi(self)
         self.preferences = preferences
-        self.recorder_store = recorder_store
+        self.measurement_store = measurement_store
         self.fs = fs
         self.sens = sens
-        for r in self.recorder_store:
-            self.recorder.addItem(r.ip_address)
+        for m in self.measurement_store:
+            self.measurement.addItem(m.key)
         self.statusbar = statusbar
         self.location.setText(self.preferences.get(WAV_DOWNLOAD_DIR))
         self.axes.selectAll()
@@ -90,22 +98,26 @@ class SaveWavDialog(QDialog, Ui_saveWavDialog):
     def accept(self):
         name = self.fileName.text()
         if len(name) > 0:
-            if name[-4:] != '.wav':
-                name = f"{name}.wav"
-            file_name = os.path.join(self.location.text(), name)
-            output_file = str(file_name[0]).strip()
-            rec = next((r for r in self.recorder_store if r.ip_address == self.recorder.currentText()), None)
-            if rec is not None:
-                _, data, _, _ = rec.snap()
-                if len(data) > 0:
-                    columns = [self.__idx(t.text()) for t in self.axes.selectedItems()]
-                    samples = data[:, columns] / self.sens
-                    wavfile.write(file_name, self.fs, samples)
-                    if self.statusbar is not None:
-                        self.statusbar.showMessage(f"Saved {self.recorder.currentText()} to {output_file}", 5000)
-                else:
-                    if self.statusbar is not None:
-                        self.statusbar.showMessage(f"{self.recorder.currentText()} has no data")
+            if name[-4:] == '.wav':
+                name = name[:-4]
+            m = next((m for m in self.measurement_store if m.key == self.measurement.currentText()), None)
+            if m is not None:
+                data = m.data
+                output_fs = self.fs
+                if self.outputFs.currentText() != 'Native':
+                    output_fs = int(float(self.outputFs.currentText().split(' ')[0]) * 1000)
+                for t in self.axes.selectedItems():
+                    with wait_cursor():
+                        d = data[:, self.__idx(t.text())] / self.sens
+                        if output_fs != self.fs:
+                            start = time.time()
+                            d = resample(d, self.fs, output_fs)
+                            end = time.time()
+                            logger.debug(f"Resampled {self.measurement.currentText()}:{t.text()} in {to_millis(start, end)}ms")
+                        output_file = os.path.join(self.location.text(), f"{name}_{t.text()}_{output_fs}.wav")
+                        wavfile.write(output_file, output_fs, d)
+                if self.statusbar is not None:
+                    self.statusbar.showMessage(f"Saved {self.measurement.currentText()}", 5000)
             QDialog.accept(self)
 
     @staticmethod

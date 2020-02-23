@@ -14,24 +14,7 @@
    <string>Dialog</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="1" column="0">
-    <widget class="QLabel" name="axesLabel">
-     <property name="text">
-      <string>Axes</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="2">
-    <widget class="QToolButton" name="locationPicker">
-     <property name="text">
-      <string>...</string>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="1" colspan="2">
-    <widget class="QLineEdit" name="fileName"/>
-   </item>
-   <item row="4" column="0" colspan="3">
+   <item row="5" column="0" colspan="3">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -41,15 +24,33 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="0">
+   <item row="4" column="0">
     <widget class="QLabel" name="fileNameLabel">
      <property name="text">
       <string>Name</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="1" colspan="2">
-    <widget class="QComboBox" name="recorder"/>
+   <item row="0" column="0">
+    <widget class="QLabel" name="measurementLabel">
+     <property name="text">
+      <string>Measurement</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QLineEdit" name="location">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="axesLabel">
+     <property name="text">
+      <string>Axes</string>
+     </property>
+    </widget>
    </item>
    <item row="1" column="1" colspan="2">
     <widget class="QListWidget" name="axes">
@@ -73,25 +74,50 @@
      </item>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="QLineEdit" name="location">
-     <property name="readOnly">
-      <bool>true</bool>
+   <item row="3" column="2">
+    <widget class="QToolButton" name="locationPicker">
+     <property name="text">
+      <string>...</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="0">
-    <widget class="QLabel" name="localtionLabel">
+   <item row="4" column="1" colspan="2">
+    <widget class="QLineEdit" name="fileName"/>
+   </item>
+   <item row="0" column="1" colspan="2">
+    <widget class="QComboBox" name="measurement"/>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="locationLabel">
      <property name="text">
       <string>Location</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
-    <widget class="QLabel" name="recorderLabel">
+   <item row="2" column="0">
+    <widget class="QLabel" name="outputFsLabel">
      <property name="text">
-      <string>Recorder</string>
+      <string>Output Fs</string>
      </property>
+    </widget>
+   </item>
+   <item row="2" column="1" colspan="2">
+    <widget class="QComboBox" name="outputFs">
+     <item>
+      <property name="text">
+       <string>Native</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>44.1 kHz</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>48 kHz</string>
+      </property>
+     </item>
     </widget>
    </item>
   </layout>

@@ -16,6 +16,7 @@ markdown = "*"
 semver = "*"
 twisted = "*"
 pillow = "*"
+resampy = "*"
 
 [dev-packages]
 pytest = "*"

@@ -404,10 +404,10 @@ class QVibe(QMainWindow, Ui_MainWindow):
 
     def export_wav(self):
         ''' Saves data from a recorder to a file. '''
-        if len(self.__recorder_store) > 0:
+        if len(self.__measurement_store) > 0:
             dialog = SaveWavDialog(self,
                                    self.preferences,
-                                   self.__recorder_store,
+                                   self.__measurement_store,
                                    self.targetSampleRate.value(),
                                    int(self.targetAccelSens.currentText()),
                                    self.statusbar)
