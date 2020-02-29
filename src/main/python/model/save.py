@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 import time
 
 import math
@@ -82,7 +83,8 @@ class SaveWavDialog(QDialog, Ui_saveWavDialog):
         self.fs = fs
         self.sens = sens
         for m in self.measurement_store:
-            self.measurement.addItem(m.key)
+            if m.latest_data is not None:
+                self.measurement.addItem(m.key)
         self.statusbar = statusbar
         self.location.setText(self.preferences.get(WAV_DOWNLOAD_DIR))
         self.axes.selectAll()
@@ -109,6 +111,10 @@ class SaveWavDialog(QDialog, Ui_saveWavDialog):
                 for t in self.axes.selectedItems():
                     with wait_cursor():
                         d = data[:, self.__idx(t.text())] / self.sens
+                        if self.dcOffset.isChecked():
+                            mean = np.mean(d)
+                            d = d - mean
+                            logger.debug(f"Removed dc offset: {mean} from {self.measurement.currentText()}:{t.text()}")
                         if output_fs != self.fs:
                             start = time.time()
                             d = resample(d, self.fs, output_fs)
