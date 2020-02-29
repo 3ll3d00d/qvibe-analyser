@@ -268,6 +268,10 @@ class VisibleChart:
         else:
             return None
 
+    def remove_cached(self, measurement_name):
+        if measurement_name in self.__cached:
+            del self.__cached[measurement_name]
+
     def do_update(self, measurement_name, idx, data):
         '''
         Update the chart.

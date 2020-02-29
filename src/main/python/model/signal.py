@@ -7,7 +7,7 @@ from scipy import signal
 from scipy.interpolate import PchipInterpolator
 
 from model.log import to_millis
-from model.preferences import SUM_X_SCALE, SUM_Y_SCALE, SUM_Z_SCALE
+from model.preferences import SUM_X_SCALE, SUM_Y_SCALE, SUM_Z_SCALE, ANALYSIS_DETREND
 from common import np_to_str
 
 SAVGOL_WINDOW_LENGTH = 101
@@ -347,7 +347,8 @@ class Signal(AnalysableSignal):
             psd in dB
         """
         nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
-        f, Pxx_den = signal.welch(self.__data, self.fs, nperseg=nperseg, detrend=False,
+        detrend = False if self.prefs.get(ANALYSIS_DETREND) == 'none' else self.prefs.get(ANALYSIS_DETREND)
+        f, Pxx_den = signal.welch(self.__data, self.fs, nperseg=nperseg, detrend=detrend,
                                   window=window if window else 'hann', **kwargs)
         Pxx_den_db = power_to_db(np.nan_to_num(np.sqrt(Pxx_den)), ref)
         return f, Pxx_den, Pxx_den_db
@@ -366,7 +367,8 @@ class Signal(AnalysableSignal):
             linear spectrum in dB
         """
         nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
-        f, Pxx_spec = signal.welch(self.__data, self.fs, nperseg=nperseg, scaling='spectrum', detrend=False,
+        detrend = False if self.prefs.get(ANALYSIS_DETREND) == 'none' else self.prefs.get(ANALYSIS_DETREND)
+        f, Pxx_spec = signal.welch(self.__data, self.fs, nperseg=nperseg, scaling='spectrum', detrend=detrend,
                                    window=window if window else 'hann', **kwargs)
         # a 3dB adjustment is required to account for the change in nperseg
         Pxx_spec_db = amplitude_to_db(np.nan_to_num(np.sqrt(Pxx_spec)), ADJUST_BY_3DB * ref)
@@ -386,12 +388,13 @@ class Signal(AnalysableSignal):
             linear spectrum max values in dB.
         """
         nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
+        detrend = False if self.prefs.get(ANALYSIS_DETREND) == 'none' else self.prefs.get(ANALYSIS_DETREND)
         freqs, _, Pxy = signal.spectrogram(self.__data,
                                            self.fs,
                                            window=window if window else ('tukey', 0.25),
                                            nperseg=int(nperseg),
                                            noverlap=int(nperseg // 2),
-                                           detrend=False,
+                                           detrend=detrend,
                                            scaling='spectrum')
         Pxy_max = np.sqrt(Pxy.max(axis=-1).real)
         # a 3dB adjustment is required to account for the change in nperseg
@@ -411,12 +414,13 @@ class Signal(AnalysableSignal):
             linear spectrum values.
         """
         nperseg = get_segment_length(self.fs, resolution_shift=resolution_shift)
+        detrend = False if self.prefs.get(ANALYSIS_DETREND) == 'none' else self.prefs.get(ANALYSIS_DETREND)
         f, t, Sxx = signal.spectrogram(self.__data,
                                        self.fs,
                                        window=window if window else ('tukey', 0.25),
                                        nperseg=nperseg,
                                        noverlap=int(nperseg // 2),
-                                       detrend=False,
+                                       detrend=detrend,
                                        scaling='spectrum')
         Sxx = amplitude_to_db(np.sqrt(Sxx), ref=ref * ADJUST_BY_3DB)
         return f, t, Sxx

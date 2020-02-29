@@ -38,6 +38,8 @@ ANALYSIS_TARGET_FS = 'analysis/target_fs'
 ANALYSIS_WINDOW_DEFAULT = 'Default'
 ANALYSIS_AVG_WINDOW = 'analysis/avg_window'
 ANALYSIS_PEAK_WINDOW = 'analysis/peak_window'
+ANALYSIS_DETREND = 'analysis/detrend'
+ANALYSIS_HPF_RTA = 'analysis/hpfrta'
 
 CHART_MAG_MIN = 'chart/mag_min'
 CHART_MAG_MAX = 'chart/mag_max'
@@ -66,6 +68,8 @@ DEFAULT_PREFS = {
     ANALYSIS_TARGET_FS: 1000,
     ANALYSIS_AVG_WINDOW: ANALYSIS_WINDOW_DEFAULT,
     ANALYSIS_PEAK_WINDOW: ANALYSIS_WINDOW_DEFAULT,
+    ANALYSIS_DETREND: 'constant',
+    ANALYSIS_HPF_RTA: False,
     BUFFER_SIZE: 30,
     CHART_MAG_MIN: 40,
     CHART_MAG_MAX: 120,
@@ -95,6 +99,7 @@ DEFAULT_PREFS = {
 TYPES = {
     ANALYSIS_RESOLUTION: float,
     ANALYSIS_TARGET_FS: int,
+    ANALYSIS_HPF_RTA: bool,
     BUFFER_SIZE: int,
     CHART_MAG_MIN: int,
     CHART_MAG_MAX: int,
@@ -226,6 +231,8 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.zScale.setValue(self.__preferences.get(SUM_Z_SCALE))
         self.magMin.setValue(self.__preferences.get(CHART_MAG_MIN))
         self.magMax.setValue(self.__preferences.get(CHART_MAG_MAX))
+        self.highpassRTA.setChecked(self.__preferences.get(ANALYSIS_HPF_RTA))
+        self.init_combo(ANALYSIS_DETREND, self.detrend, lambda a: f"{a[0].upper()}{a[1:]}")
         self.magMin.valueChanged['int'].connect(self.__balance_mag)
         self.magMax.valueChanged['int'].connect(self.__balance_mag)
         self.freqMin.setValue(self.__preferences.get(CHART_FREQ_MIN))
@@ -364,6 +371,8 @@ class PreferencesDialog(QDialog, Ui_preferencesDialog):
         self.__preferences.set(CHART_FREQ_MAX, self.freqMax.value())
         self.__preferences.set(CHART_SPECTRO_SCALE_ALGO, self.spectroScaleAlgo.currentText())
         self.__preferences.set(CHART_SPECTRO_SCALE_FACTOR, self.spectroScaleFactor.currentText())
+        self.__preferences.set(ANALYSIS_DETREND, self.detrend.currentText().lower())
+        self.__preferences.set(ANALYSIS_HPF_RTA, self.highpassRTA.isChecked())
         # TODO would be nicer to be able to listen to specific values
         self.__spectro.update_scale()
         if self.recorders.count() > 0:

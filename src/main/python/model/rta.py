@@ -11,7 +11,7 @@ from qtpy.QtCore import Qt
 from common import format_pg_plotitem, block_signals, FlowLayout
 from model.charts import VisibleChart, ChartEvent
 from model.frd import ExportDialog
-from model.preferences import RTA_TARGET, RTA_HOLD_SECONDS, RTA_SMOOTH_WINDOW, RTA_SMOOTH_POLY
+from model.preferences import RTA_TARGET, RTA_HOLD_SECONDS, RTA_SMOOTH_WINDOW, RTA_SMOOTH_POLY, ANALYSIS_HPF_RTA
 from model.signal import smooth_savgol, Analysis, TriAxisSignal, REF_ACCELERATION_IN_G
 
 TARGET_PLOT_NAME = 'Target'
@@ -32,14 +32,14 @@ class RTAEvent(ChartEvent):
 
     def __make_sig(self, chunk):
         tas = TriAxisSignal(self.preferences,
-                             self.measurement_name,
-                             chunk,
-                             self.chart.fs,
-                             self.chart.resolution_shift,
-                             idx=self.idx,
-                             mode='vibration',
-                             view_mode='spectrogram',
-                             pre_calc=self.__visible)
+                            self.measurement_name,
+                            chunk,
+                            self.chart.fs,
+                            self.chart.resolution_shift,
+                            idx=self.idx,
+                            mode='vibration' if self.preferences.get(ANALYSIS_HPF_RTA) is True else '',
+                            view_mode='spectrogram',
+                            pre_calc=self.__visible)
         tas.set_view(self.__view, recalc=False)
         if self.__visible:
             tas.recalc()
@@ -124,7 +124,8 @@ class RTA(VisibleChart):
         self.__show_value_selector.currentTextChanged.connect(self.__set_show_value_curve)
         # crosshairs
         self.__v_line_label = CurveAwareLabel()
-        self.__v_line = pg.InfiniteLine(angle=90, movable=False, label=self.__v_line_label, labelOpts={'position': 0.95})
+        self.__v_line = pg.InfiniteLine(angle=90, movable=False, label=self.__v_line_label,
+                                        labelOpts={'position': 0.95})
         self.__h_line = pg.InfiniteLine(angle=0, movable=False, label=AccelerationLabel(), labelOpts={'position': 0.95})
         self.__chart.getPlotItem().addItem(self.__v_line, ignoreBounds=True)
         self.__chart.getPlotItem().addItem(self.__h_line, ignoreBounds=True)
@@ -155,6 +156,8 @@ class RTA(VisibleChart):
         '''
         if measurement.key in self.__known_measurements:
             self.__known_measurements.remove(measurement.key)
+        self.__chunk_calc.reset(measurement.key)
+        self.remove_cached(measurement.key)
         self.__remove_from_selector(self.__ref_curve_selector, measurement.key)
         self.__remove_from_selector(self.__show_value_selector, measurement.key)
 
@@ -213,7 +216,7 @@ class RTA(VisibleChart):
         :param wl: the length.
         '''
         if wl % 2 == 0:
-            self.__ui.sg_window_length.setValue(wl+1)
+            self.__ui.sg_window_length.setValue(wl + 1)
         else:
             self.__sg_wl = wl
         if self.__smooth is True:
@@ -560,7 +563,8 @@ class RTA(VisibleChart):
         :param pen_args: the description of the pen.
         '''
         if self.is_visible(measurement=measurement_name, axis=axis) is True:
-            y = smooth_savgol(x_data, y_data, wl=self.__sg_wl, poly=self.__sg_poly)[1] if self.__smooth is True else y_data
+            y = smooth_savgol(x_data, y_data, wl=self.__sg_wl, poly=self.__sg_poly)[
+                1] if self.__smooth is True else y_data
             self.__render_or_update(pen_args, plot_name, x_data, y, axis=axis)
         elif plot_name in self.__plots:
             self.__remove_named_plot(plot_name)
@@ -663,6 +667,10 @@ class ChunkCalculator:
         self.min_nperseg = min_nperseg
         self.stride = stride
 
+    def reset(self, name):
+        if name in self.last_idx:
+            del self.last_idx[name]
+
     def recalc(self, name, data):
         last_processed_idx = int(max(self.last_idx.get(name, 0), data[:, 0][0]))
         last_sample_idx = np.argmax(data[:, 0] == last_processed_idx) if last_processed_idx > 0 else 0
@@ -707,7 +715,7 @@ class CurveAwareLabel:
                 sep = ' / '
                 unit = 'G'
                 suffix = ''
-                accel = 10.0 ** (mag/20) * REF_ACCELERATION_IN_G
+                accel = 10.0 ** (mag / 20) * REF_ACCELERATION_IN_G
                 if accel <= 0.1:
                     accel *= 1000.0
                     suffix = 'm'
@@ -727,7 +735,7 @@ class AccelerationLabel:
         self.__format = '[{value:0.1f} dB / {accel:0.3f} {suffix}G]'
 
     def format(self, value):
-        accel = 10.0 ** (value/20) * REF_ACCELERATION_IN_G
+        accel = 10.0 ** (value / 20) * REF_ACCELERATION_IN_G
         if accel <= 0.1:
             accel *= 1000.0
             suffix = 'm'
